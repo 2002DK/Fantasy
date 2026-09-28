@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "C:\\Users\\Dani\\Documents\\Fantasy\\backend\\run-dev.cmd"],
+      "port": 8080
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:\\Users\\Dani\\Documents\\Fantasy\\frontend", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}
