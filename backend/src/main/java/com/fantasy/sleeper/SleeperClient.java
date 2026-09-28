@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -42,5 +43,34 @@ public class SleeperClient {
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<SleeperLeague>>() {});
         return leagues != null ? leagues : List.of();
+    }
+
+    /** Unlike users, Sleeper answers an unknown league with a real 404. */
+    public Optional<SleeperLeague> getLeague(String leagueId) {
+        try {
+            SleeperLeague league = restClient.get()
+                    .uri("/league/{leagueId}", leagueId)
+                    .retrieve()
+                    .body(SleeperLeague.class);
+            return Optional.ofNullable(league);
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
+    }
+
+    public List<SleeperRoster> getRosters(String leagueId) {
+        List<SleeperRoster> rosters = restClient.get()
+                .uri("/league/{leagueId}/rosters", leagueId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<SleeperRoster>>() {});
+        return rosters != null ? rosters : List.of();
+    }
+
+    public List<SleeperLeagueUser> getLeagueUsers(String leagueId) {
+        List<SleeperLeagueUser> users = restClient.get()
+                .uri("/league/{leagueId}/users", leagueId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<SleeperLeagueUser>>() {});
+        return users != null ? users : List.of();
     }
 }

@@ -2,6 +2,7 @@ package com.fantasy.sleeper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restclient.test.autoconfigure.RestClientTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 
@@ -50,7 +52,57 @@ class SleeperClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         assertThat(client.getLeagues("123", "2026"))
-                .isEqualTo(List.of(new SleeperLeague("L1", "Dynasty", "2026", "in_season", 12, null)));
+                .isEqualTo(List.of(new SleeperLeague("L1", "Dynasty", "2026", "in_season", 12, null, null)));
+    }
+
+    @Test
+    void getLeagueReadsRosterPositions() {
+        server.expect(requestTo(BASE + "/league/L1"))
+                .andRespond(withSuccess("""
+                        {"league_id":"L1","name":"Dynasty","season":"2026","status":"in_season","total_rosters":12,
+                         "avatar":null,"roster_positions":["QB","FLEX","BN"],"scoring_settings":{"rec":1.0}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.getLeague("L1")).map(SleeperLeague::rosterPositions)
+                .contains(List.of("QB", "FLEX", "BN"));
+    }
+
+    @Test
+    void getLeagueReturnsEmptyOn404() {
+        server.expect(requestTo(BASE + "/league/1"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).body("null").contentType(MediaType.APPLICATION_JSON));
+
+        assertThat(client.getLeague("1")).isEmpty();
+    }
+
+    @Test
+    void getRostersKeepsNullListsAndSplitPoints() {
+        server.expect(requestTo(BASE + "/league/L1/rosters"))
+                .andRespond(withSuccess("""
+                        [{"roster_id":1,"owner_id":"123","co_owners":null,"players":["4881","CLE"],
+                          "starters":["4881","CLE"],"reserve":null,"taxi":null,
+                          "settings":{"wins":7,"losses":6,"ties":0,"fpts":1776,"fpts_decimal":6,
+                                      "fpts_against":1695,"fpts_against_decimal":36,"waiver_position":4}}]
+                        """, MediaType.APPLICATION_JSON));
+
+        SleeperRoster roster = client.getRosters("L1").getFirst();
+
+        assertThat(roster.players()).containsExactly("4881", "CLE");
+        assertThat(roster.reserve()).isNull();
+        assertThat(roster.settings()).isEqualTo(new SleeperRoster.Settings(7, 6, 0, 1776, 6, 1695, 36));
+    }
+
+    @Test
+    void getLeagueUsersReadsTeamNameFromMetadata() {
+        server.expect(requestTo(BASE + "/league/L1/users"))
+                .andRespond(withSuccess("""
+                        [{"user_id":"123","display_name":"Dani","avatar":"abc","metadata":{"team_name":"Giant Dolphins","allow_pn":"on"}},
+                         {"user_id":"456","display_name":"Sunny","avatar":null,"metadata":{}}]
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.getLeagueUsers("L1"))
+                .extracting(SleeperLeagueUser::teamName)
+                .containsExactly("Giant Dolphins", null);
     }
 
     @Test
