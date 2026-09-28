@@ -15,5 +15,13 @@ public record SleeperLeague(
         /** Slot per roster position, e.g. QB, RB, FLEX, BN. Starters fill the non-BN slots in order. */
         @JsonProperty("roster_positions") List<String> rosterPositions,
         /** Points per unit of each stat, e.g. rec 0.5 (half PPR), pass_td 6, pass_yd 0.04. */
-        @JsonProperty("scoring_settings") Map<String, Double> scoringSettings) {
+        @JsonProperty("scoring_settings") Map<String, Double> scoringSettings,
+        @JsonProperty("settings") Settings settings) {
+
+    /** playoff_week_start and trade_deadline are 0 when the league has not set them. */
+    public record Settings(
+            @JsonProperty("playoff_week_start") int playoffWeekStart,
+            @JsonProperty("playoff_teams") int playoffTeams,
+            @JsonProperty("trade_deadline") int tradeDeadline) {
+    }
 }

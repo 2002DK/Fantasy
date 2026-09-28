@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
@@ -121,6 +122,29 @@ class RosterServiceTest {
     }
 
     @Test
+    void listsEveryTeamWithPlayersSortedByPosition() {
+        givenLeague(List.of("QB", "RB", "BN"));
+        given(sleeperClient.getRosters(LEAGUE_ID)).willReturn(List.of(
+                roster(1, "me", null, List.of("100", "200"), List.of("100"), null, null),
+                roster(2, null, null, List.of(), List.of(), null, null)));
+        given(sleeperClient.getLeagueUsers(LEAGUE_ID)).willReturn(List.of(
+                new SleeperLeagueUser("me", "Dani", null, new SleeperLeagueUser.Metadata("Giant Dolphins"))));
+        // doReturn: overriding setUp's answer with given() would invoke that answer with a null argument
+        doReturn(Map.of(
+                "100", new PlayerSummary("100", "Zed Back", "RB", "PHI", null),
+                "200", new PlayerSummary("200", "Al Passer", "QB", "CIN", null)))
+                .when(playerService).findSummaries(any());
+
+        List<LeagueTeam> teams = service.findAllTeams(LEAGUE_ID);
+
+        assertThat(teams).hasSize(2);
+        assertThat(teams.getFirst().owner().teamName()).isEqualTo("Giant Dolphins");
+        assertThat(teams.getFirst().players()).extracting(PlayerSummary::position).containsExactly("QB", "RB");
+        assertThat(teams.get(1).owner().displayName()).isNull();
+        assertThat(teams.get(1).players()).isEmpty();
+    }
+
+    @Test
     void unknownLeagueIsNotFound() {
         given(sleeperClient.getLeague("404")).willReturn(Optional.empty());
 
@@ -142,7 +166,7 @@ class RosterServiceTest {
 
     private void givenLeague(List<String> rosterPositions) {
         given(sleeperClient.getLeague(LEAGUE_ID)).willReturn(Optional.of(
-                new SleeperLeague(LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, rosterPositions, Map.of())));
+                new SleeperLeague(LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, rosterPositions, Map.of(), null)));
     }
 
     private static PlayerSummary player(String id) {

@@ -35,11 +35,12 @@ function readParams() {
     username: params.get('u') || null,
     season: params.get('season') || null,
     leagueId: params.get('league') || null,
+    tool: params.get('tool') || null,
   }
 }
 
 /**
- * App navigation state kept in the URL query (?u=&season=&league=) so refresh,
+ * App navigation state kept in the URL query (?u=&season=&league=&tool=) so refresh,
  * the back button and shared links all land on the same view.
  */
 export function useUrlState() {
@@ -56,9 +57,10 @@ export function useUrlState() {
     if (next.username) params.set('u', next.username)
     if (next.season) params.set('season', next.season)
     if (next.leagueId) params.set('league', next.leagueId)
+    if (next.tool) params.set('tool', next.tool)
     const query = params.toString()
     window.history.pushState(null, '', query ? `?${query}` : window.location.pathname)
-    setState({ username: null, season: null, leagueId: null, ...next })
+    setState({ username: null, season: null, leagueId: null, tool: null, ...next })
   }, [])
 
   return [state, navigate]

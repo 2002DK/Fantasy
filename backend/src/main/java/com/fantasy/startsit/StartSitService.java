@@ -20,6 +20,10 @@ import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.stats.DefenseTable;
+import com.fantasy.stats.Positions;
+import com.fantasy.stats.ScoringCalculator;
+import com.fantasy.stats.WeeklyDataService;
 import com.fantasy.startsit.StartSitResponse.Confidence;
 import com.fantasy.startsit.StartSitResponse.Matchup;
 import com.fantasy.startsit.StartSitResponse.PlayerAnalysis;
@@ -305,7 +309,7 @@ public class StartSitService {
                 Matchup m = p.matchup();
                 reasons.add("%s faces %s, who allow %s points to %s (%s per game)."
                         .formatted(name(p), m.opponent(), standingPhrase(m.rank(), m.teams()),
-                                positionName(p.player().position()),
+                                Positions.pluralName(p.player().position()),
                                 fmt(m.allowedPerGame())));
             }
         }
@@ -320,13 +324,6 @@ public class StartSitService {
         return reasons;
     }
 
-    private static final Map<String, String> POSITION_NAMES = Map.of(
-            "QB", "quarterbacks", "RB", "running backs", "WR", "receivers",
-            "TE", "tight ends", "K", "kickers", "DEF", "defenses");
-
-    private static String positionName(String position) {
-        return position != null ? POSITION_NAMES.getOrDefault(position, position + "s") : "this position";
-    }
 
     /** "the most", "the 4th-most", "the 3rd-fewest", "the fewest": whichever end of the table is nearer. */
     static String standingPhrase(int rank, int teams) {

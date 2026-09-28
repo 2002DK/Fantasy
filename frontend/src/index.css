@@ -540,6 +540,133 @@ select {
   font-size: 0.8125rem;
 }
 
+.small {
+  font-size: 0.8125rem;
+}
+
+/* Tool tabs */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  background: none;
+  color: var(--muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 12px;
+  margin-bottom: -1px;
+}
+
+.tab:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Trade analyzer */
+
+.trade-builder {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.trade-builder .roster-section {
+  margin-top: 0;
+}
+
+.pick-list {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 8px;
+  margin: 0 -8px;
+}
+
+.partner-select {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.trade-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.trade-side {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.trade-side.recommended {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.trade-side-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.trade-side-header h4 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.trade-total {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-player {
+  padding-top: 12px;
+}
+
+.trade-player + .trade-player {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.trade-stats dd .small {
+  font-weight: 400;
+}
+
+.value-explainer {
+  margin: 12px 0 0;
+}
+
+.tag.strength-FAIR {
+  color: var(--warn);
+  border-color: currentColor;
+}
+
+.tag.strength-SLIGHT {
+  color: var(--accent);
+  border-color: currentColor;
+}
+
+.tag.strength-CLEAR {
+  color: var(--pos-RB);
+  border-color: currentColor;
+}
+
 .slot {
   width: 56px;
   flex-shrink: 0;

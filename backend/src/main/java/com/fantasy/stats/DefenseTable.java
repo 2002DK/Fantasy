@@ -1,4 +1,4 @@
-package com.fantasy.startsit;
+package com.fantasy.stats;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -14,9 +14,9 @@ import com.fantasy.sleeper.SleeperWeeklyEntry;
  * defense rows. Only relative standing is used, so the scoring system Sleeper uses
  * for these totals does not matter.
  */
-final class DefenseTable {
+public final class DefenseTable {
 
-    record Standing(double allowedPerGame, double leagueAverage, int rank, int teams) {
+    public record Standing(double allowedPerGame, double leagueAverage, int rank, int teams) {
     }
 
     private static final String ALLOWED_PREFIX = "fan_pts_allow_";
@@ -28,7 +28,7 @@ final class DefenseTable {
         this.averages = averages;
     }
 
-    static DefenseTable from(List<List<SleeperWeeklyEntry>> weeks) {
+    public static DefenseTable from(List<List<SleeperWeeklyEntry>> weeks) {
         Map<String, Map<String, double[]>> totals = new HashMap<>();
         for (List<SleeperWeeklyEntry> week : weeks) {
             for (SleeperWeeklyEntry entry : week) {
@@ -56,7 +56,7 @@ final class DefenseTable {
     }
 
     /** Rank 1 = the defense that allows the most points to this position (the easiest matchup). */
-    Optional<Standing> standing(String defenseTeam, String position) {
+    public Optional<Standing> standing(String defenseTeam, String position) {
         if (position == null) {
             return Optional.empty();
         }

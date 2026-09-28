@@ -26,6 +26,15 @@ export function fetchStartSit(leagueId, playerA, playerB, signal) {
   return getJson(`/api/leagues/${encodeURIComponent(leagueId)}/start-sit?${query}`, signal)
 }
 
+export function fetchLeagueTeams(leagueId, signal) {
+  return getJson(`/api/leagues/${encodeURIComponent(leagueId)}/rosters`, signal)
+}
+
+export function fetchTrade(leagueId, giveIds, getIds, signal) {
+  const query = new URLSearchParams({ give: giveIds.join(','), get: getIds.join(',') })
+  return getJson(`/api/leagues/${encodeURIComponent(leagueId)}/trade?${query}`, signal)
+}
+
 export function fetchRoster(leagueId, userId, signal) {
   return getJson(
     `/api/leagues/${encodeURIComponent(leagueId)}/users/${encodeURIComponent(userId)}/roster`,

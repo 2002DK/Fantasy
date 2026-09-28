@@ -5,7 +5,7 @@ import UsernameForm from './components/UsernameForm.jsx'
 import { useApi, useUrlState } from './hooks.js'
 
 function App() {
-  const [{ username, season, leagueId }, navigate] = useUrlState()
+  const [{ username, season, leagueId, tool }, navigate] = useUrlState()
 
   const leagues = useApi(
     (signal) => fetchLeagues(username, season, signal),
@@ -25,6 +25,8 @@ function App() {
       <RosterView
         key={leagueId}
         roster={leagues.loading ? leagues : roster}
+        tool={tool}
+        onToolChange={(next) => navigate({ username, season, leagueId, tool: next === 'start-sit' ? null : next })}
         onBack={() => navigate({ username, season })}
       />
     )

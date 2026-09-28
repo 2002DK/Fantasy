@@ -1,4 +1,4 @@
-package com.fantasy.startsit;
+package com.fantasy.stats;
 
 import java.time.Clock;
 import java.time.Duration;

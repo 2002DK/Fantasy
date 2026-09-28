@@ -24,6 +24,7 @@ import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.stats.WeeklyDataService;
 import com.fantasy.startsit.StartSitResponse.Confidence;
 import com.fantasy.startsit.StartSitResponse.Matchup;
 import com.fantasy.startsit.StartSitResponse.PlayerAnalysis;
@@ -58,7 +59,7 @@ class StartSitServiceTest {
     void setUp() {
         service = new StartSitService(sleeperClient, weeklyData, playerService);
         lenient().when(sleeperClient.getLeague(LEAGUE_ID)).thenReturn(Optional.of(new SleeperLeague(
-                LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, List.of(), Map.of("rush_yd", 0.1))));
+                LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, List.of(), Map.of("rush_yd", 0.1), null)));
         lenient().when(sleeperClient.getNflState()).thenReturn(new NflState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA);
         lenient().when(weeklyData.schedule("2026")).thenReturn(List.of(

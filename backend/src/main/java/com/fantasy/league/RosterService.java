@@ -3,6 +3,8 @@ package com.fantasy.league;
 import static com.fantasy.sleeper.SleeperAvatars.thumbUrl;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +35,37 @@ public class RosterService {
     }
 
     /** Finds the roster the user owns or co-owns in the league. */
+    /** Every team in the league with its players sorted by position, for choosing trade targets. */
+    public List<LeagueTeam> findAllTeams(String leagueId) {
+        if (sleeperClient.getLeague(leagueId).isEmpty()) {
+            throw new NotFoundException("No Sleeper league found with ID '" + leagueId + "'");
+        }
+        List<SleeperRoster> rosters = sleeperClient.getRosters(leagueId);
+        Map<String, SleeperLeagueUser> usersById = new HashMap<>();
+        sleeperClient.getLeagueUsers(leagueId).forEach(u -> usersById.put(u.userId(), u));
+        Set<String> allIds = new LinkedHashSet<>();
+        rosters.forEach(r -> allIds.addAll(orEmpty(r.players())));
+        Map<String, PlayerSummary> players = playerService.findSummaries(allIds);
+
+        return rosters.stream()
+                .map(r -> new LeagueTeam(
+                        r.rosterId(),
+                        toOwner(r.ownerId(), r.ownerId() != null ? usersById.get(r.ownerId()) : null),
+                        orEmpty(r.players()).stream()
+                                .map(players::get)
+                                .sorted(Comparator.comparingInt((PlayerSummary p) -> positionOrder(p.position()))
+                                        .thenComparing(p -> p.name() != null ? p.name() : ""))
+                                .toList()))
+                .toList();
+    }
+
+    private static final List<String> POSITION_ORDER = List.of("QB", "RB", "WR", "TE", "K", "DEF");
+
+    private static int positionOrder(String position) {
+        int index = POSITION_ORDER.indexOf(position);
+        return index >= 0 ? index : POSITION_ORDER.size();
+    }
+
     public RosterResponse findRoster(String leagueId, String userId) {
         SleeperLeague league = sleeperClient.getLeague(leagueId)
                 .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));

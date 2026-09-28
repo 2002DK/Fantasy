@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
 import StartSitPanel from './StartSitPanel.jsx'
+import TradeView from './TradeView.jsx'
 import { ErrorMessage, Loading } from './Status.jsx'
 
 function PlayerCells({ player }) {
@@ -54,8 +55,61 @@ function formatPoints(points) {
   return points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export default function RosterView({ roster, onBack }) {
+const TOOLS = [
+  { id: 'start-sit', label: 'Start/Sit' },
+  { id: 'trade', label: 'Trade' },
+]
+
+/** The roster with tappable rows: picking two players shows the start/sit comparison. */
+function StartSitTool({ data }) {
   const [selectedIds, setSelectedIds] = useState([])
+
+  /** Up to two players; picking a third replaces the most recent pick. */
+  function toggle(playerId) {
+    setSelectedIds((ids) =>
+      ids.includes(playerId) ? ids.filter((id) => id !== playerId) : [ids[0], playerId].filter(Boolean).slice(-2),
+    )
+  }
+  const selection = (playerId) => ({ selected: selectedIds.includes(playerId), onToggle: toggle })
+
+  return (
+    <>
+      {selectedIds.length === 2 ? (
+        <StartSitPanel leagueId={data.leagueId} playerIds={selectedIds} onClear={() => setSelectedIds([])} />
+      ) : (
+        <p className="hint muted">
+          {selectedIds.length === 0
+            ? 'Tap two players to compare who to start this week.'
+            : 'Pick one more player to compare.'}
+        </p>
+      )}
+      <section className="card roster-section">
+        <h3>Starters</h3>
+        <ul className="player-list">
+          {data.starters.map((starter, i) =>
+            starter.player ? (
+              <SelectableRow key={i} player={starter.player} {...selection(starter.player.playerId)}>
+                <span className="slot">{starter.slot.replace('_', ' ')}</span>
+                <PlayerCells player={starter.player} />
+                <PositionChip position={starter.player.position} />
+              </SelectableRow>
+            ) : (
+              <li key={i} className="player-row">
+                <span className="slot">{starter.slot.replace('_', ' ')}</span>
+                <span className="player-name muted">Empty</span>
+              </li>
+            ),
+          )}
+        </ul>
+      </section>
+      <PlayerSection title="Bench" players={data.bench} selection={selection} />
+      <PlayerSection title="Injured reserve" players={data.reserve} selection={selection} />
+      <PlayerSection title="Taxi squad" players={data.taxi} selection={selection} />
+    </>
+  )
+}
+
+export default function RosterView({ roster, tool, onToolChange, onBack }) {
   const { data, error, loading } = roster
   const backButton = (
     <button type="button" className="link back" onClick={onBack}>
@@ -67,14 +121,7 @@ export default function RosterView({ roster, onBack }) {
   if (error) return <ErrorMessage error={error} action={backButton} />
   if (!data) return null
 
-  /** Up to two players; picking a third replaces the most recent pick. */
-  function toggle(playerId) {
-    setSelectedIds((ids) =>
-      ids.includes(playerId) ? ids.filter((id) => id !== playerId) : [ids[0], playerId].filter(Boolean).slice(-2),
-    )
-  }
-  const selection = (playerId) => ({ selected: selectedIds.includes(playerId), onToggle: toggle })
-
+  const activeTool = TOOLS.some((t) => t.id === tool) ? tool : 'start-sit'
   const { owner, record } = data
   const hasPlayers = data.starters.some((s) => s.player) || data.bench.length > 0 || data.reserve.length > 0
   const recordText = record.ties > 0 ? `${record.wins}–${record.losses}–${record.ties}` : `${record.wins}–${record.losses}`
@@ -110,37 +157,23 @@ export default function RosterView({ roster, onBack }) {
         <p className="status">No players on this roster yet. The league may not have drafted.</p>
       ) : (
         <>
-          {selectedIds.length === 2 ? (
-            <StartSitPanel leagueId={data.leagueId} playerIds={selectedIds} onClear={() => setSelectedIds([])} />
-          ) : (
-            <p className="hint muted">
-              {selectedIds.length === 0
-                ? 'Start/sit: tap two players to compare who to start this week.'
-                : 'Pick one more player to compare.'}
-            </p>
-          )}
-          <section className="card roster-section">
-            <h3>Starters</h3>
-            <ul className="player-list">
-              {data.starters.map((starter, i) =>
-                starter.player ? (
-                  <SelectableRow key={i} player={starter.player} {...selection(starter.player.playerId)}>
-                    <span className="slot">{starter.slot.replace('_', ' ')}</span>
-                    <PlayerCells player={starter.player} />
-                    <PositionChip position={starter.player.position} />
-                  </SelectableRow>
-                ) : (
-                  <li key={i} className="player-row">
-                    <span className="slot">{starter.slot.replace('_', ' ')}</span>
-                    <span className="player-name muted">Empty</span>
-                  </li>
-                ),
-              )}
-            </ul>
-          </section>
-          <PlayerSection title="Bench" players={data.bench} selection={selection} />
-          <PlayerSection title="Injured reserve" players={data.reserve} selection={selection} />
-          <PlayerSection title="Taxi squad" players={data.taxi} selection={selection} />
+          <div className="tabs" role="tablist" aria-label="Tools">
+            {TOOLS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={activeTool === t.id}
+                className={`tab${activeTool === t.id ? ' active' : ''}`}
+                onClick={() => onToolChange(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel">
+            {activeTool === 'trade' ? <TradeView roster={data} /> : <StartSitTool data={data} />}
+          </div>
         </>
       )}
     </section>

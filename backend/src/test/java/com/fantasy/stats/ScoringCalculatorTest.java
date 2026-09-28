@@ -1,4 +1,4 @@
-package com.fantasy.startsit;
+package com.fantasy.stats;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
