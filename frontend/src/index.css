@@ -1,111 +1,444 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1c1f26;
+  --muted: #6b7280;
+  --border: #e3e5ea;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-text: #ffffff;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+  --warn: #9a6700;
+  --warn-bg: #fff8db;
+  --radius: 10px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Position colors, shared convention across fantasy apps */
+  --pos-QB: #d6336c;
+  --pos-RB: #0ca678;
+  --pos-WR: #1c7ed6;
+  --pos-TE: #e8590c;
+  --pos-K: #7048e8;
+  --pos-DEF: #495057;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --bg: #111318;
+    --surface: #1a1d24;
+    --text: #e8eaee;
+    --muted: #9aa1ad;
+    --border: #2c303a;
+    --accent: #4c8dff;
+    --accent-hover: #6ba1ff;
+    --accent-text: #0b1020;
+    --danger: #ff8a80;
+    --danger-bg: #2a1614;
+    --warn: #f5c451;
+    --warn-bg: #2b2412;
+    --pos-DEF: #868e96;
   }
+}
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: 1.25rem;
+}
+
+h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* Layout */
+
+.app {
+  max-width: 760px;
   margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  padding: 24px 16px 48px;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 24px;
+}
+
+.brand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+section > .card + .card,
+.roster-section + .roster-section {
+  margin-top: 12px;
+}
+
+/* Controls */
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+button.link {
+  background: none;
+  color: var(--accent);
+  padding: 4px 0;
+  font-weight: 500;
+}
+
+button.link:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+input,
+select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Username form */
+
+.intro p {
+  margin: 8px 0 16px;
+}
+
+.username-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.username-form input {
+  flex: 1 1 220px;
+}
+
+/* Status messages */
+
+.status {
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: var(--muted);
+  text-align: center;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.status.error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: var(--radius);
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
+.status.error p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Avatars and tags */
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.avatar.small {
+  width: 36px;
+  height: 36px;
+}
+
+.avatar.placeholder {
+  display: grid;
+  place-items: center;
+  background: var(--border);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tag.status-in_season {
+  color: var(--pos-RB);
+  border-color: currentColor;
+}
+
+.tag.injury {
+  margin-left: 8px;
+  padding: 0 6px;
+  border: none;
+}
+
+.tag.injury.minor {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.tag.injury.major {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* User and league list */
+
+.user-header,
+.team-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.user-name {
+  flex: 1;
+}
+
+.user-name .muted {
+  font-size: 0.875rem;
+}
+
+.season-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.league-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.league-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.league-card:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+.league-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+/* Roster */
+
+.back {
+  margin-bottom: 8px;
+}
+
+.team-header > div:nth-child(2) {
+  flex: 1;
+  min-width: 180px;
+}
+
+.team-stats {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+}
+
+.team-stats dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.team-stats dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-section {
+  margin-top: 12px;
+}
+
+.count {
+  font-weight: 400;
+  font-size: 0.875rem;
+}
+
+.player-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.player-row:first-child {
+  border-top: none;
+}
+
+.slot {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.player-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.player-team {
+  font-size: 0.875rem;
+  width: 36px;
+  text-align: right;
+}
+
+.pos {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 0;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--muted);
+}
+
+.pos-QB { background: var(--pos-QB); }
+.pos-RB { background: var(--pos-RB); }
+.pos-WR { background: var(--pos-WR); }
+.pos-TE { background: var(--pos-TE); }
+.pos-K { background: var(--pos-K); }
+.pos-DEF { background: var(--pos-DEF); }
+
+@media (max-width: 520px) {
+  .team-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
 }

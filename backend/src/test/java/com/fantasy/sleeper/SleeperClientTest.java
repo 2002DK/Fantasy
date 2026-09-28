@@ -94,6 +94,26 @@ class SleeperClientTest {
     }
 
     @Test
+    void getRostersToleratesPreDraftRosterWithMissingFields() {
+        // Real shape of a pre-draft league: no fpts_against, unclaimed teams have a null owner
+        server.expect(requestTo(BASE + "/league/L1/rosters"))
+                .andRespond(withSuccess("""
+                        [{"roster_id":1,"owner_id":"123","co_owners":null,"players":[],"reserve":[],"taxi":[],
+                          "starters":["0","0"],
+                          "settings":{"fpts":0,"fpts_decimal":0,"losses":0,"ties":0,"wins":0,"waiver_position":10}},
+                         {"roster_id":2,"owner_id":null,"co_owners":null,"players":[],"starters":["0","0"],
+                          "settings":{"wins":0}}]
+                        """, MediaType.APPLICATION_JSON));
+
+        List<SleeperRoster> rosters = client.getRosters("L1");
+
+        assertThat(rosters).hasSize(2);
+        assertThat(rosters.getFirst().settings()).isEqualTo(new SleeperRoster.Settings(0, 0, 0, 0, 0, 0, 0));
+        assertThat(rosters.get(1).ownerId()).isNull();
+        assertThat(rosters.get(1).isOwnedBy("123")).isFalse();
+    }
+
+    @Test
     void getAllPlayersReadsMapAndNamesDefenses() {
         server.expect(requestTo(BASE + "/players/nfl"))
                 .andRespond(withSuccess("""

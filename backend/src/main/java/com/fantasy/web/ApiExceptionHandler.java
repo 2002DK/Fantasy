@@ -2,6 +2,8 @@ package com.fantasy.web;
 
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -23,6 +25,8 @@ import com.fantasy.league.NotFoundException;
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
     @ExceptionHandler(NotFoundException.class)
     public ProblemDetail handleNotFound(NotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
@@ -30,6 +34,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(RestClientException.class)
     public ProblemDetail handleSleeperFailure(RestClientException ex) {
+        log.warn("Sleeper API call failed", ex);
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Could not reach the Sleeper API. Try again shortly.");
     }
 
