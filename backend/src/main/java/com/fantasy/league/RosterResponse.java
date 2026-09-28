@@ -2,10 +2,9 @@ package com.fantasy.league;
 
 import java.util.List;
 
-/**
- * A user's team in one league. Players are Sleeper player IDs for now; they are
- * resolved to names and positions once the player database is cached.
- */
+import com.fantasy.player.PlayerSummary;
+
+/** A user's team in one league, with players resolved from the local player cache. */
 public record RosterResponse(
         String leagueId,
         String leagueName,
@@ -13,9 +12,9 @@ public record RosterResponse(
         Owner owner,
         TeamRecord record,
         List<Starter> starters,
-        List<String> bench,
-        List<String> reserve,
-        List<String> taxi) {
+        List<PlayerSummary> bench,
+        List<PlayerSummary> reserve,
+        List<PlayerSummary> taxi) {
 
     public record Owner(String userId, String displayName, String teamName, String avatarUrl) {
     }
@@ -23,7 +22,7 @@ public record RosterResponse(
     public record TeamRecord(int wins, int losses, int ties, double pointsFor, double pointsAgainst) {
     }
 
-    /** A starting slot such as QB or FLEX. {@code playerId} is null when the slot is empty. */
-    public record Starter(String slot, String playerId) {
+    /** A starting slot such as QB or FLEX. {@code player} is null when the slot is empty. */
+    public record Starter(String slot, PlayerSummary player) {
     }
 }

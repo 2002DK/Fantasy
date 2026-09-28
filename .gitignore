@@ -3,3 +3,4 @@
 *.log
 .env
 .claude/settings.local.json
+backend/data/

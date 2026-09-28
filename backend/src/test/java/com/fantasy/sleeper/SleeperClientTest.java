@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,6 +91,26 @@ class SleeperClientTest {
         assertThat(roster.players()).containsExactly("4881", "CLE");
         assertThat(roster.reserve()).isNull();
         assertThat(roster.settings()).isEqualTo(new SleeperRoster.Settings(7, 6, 0, 1776, 6, 1695, 36));
+    }
+
+    @Test
+    void getAllPlayersReadsMapAndNamesDefenses() {
+        server.expect(requestTo(BASE + "/players/nfl"))
+                .andRespond(withSuccess("""
+                        {"4866":{"player_id":"4866","full_name":"Saquon Barkley","first_name":"Saquon","last_name":"Barkley",
+                                 "position":"RB","fantasy_positions":["RB"],"team":"PHI","injury_status":null,"active":true,
+                                 "age":29,"years_exp":8,"search_rank":11,"hashtag":"#saquonbarkley"},
+                         "LAR":{"player_id":"LAR","first_name":"Los Angeles","last_name":"Rams","position":"DEF",
+                                "fantasy_positions":["DEF"],"team":"LAR","active":true}}
+                        """, MediaType.APPLICATION_JSON));
+
+        Map<String, SleeperPlayer> players = client.getAllPlayers();
+
+        assertThat(players).containsOnlyKeys("4866", "LAR");
+        assertThat(players.get("4866").displayName()).isEqualTo("Saquon Barkley");
+        assertThat(players.get("4866").searchRank()).isEqualTo(11);
+        assertThat(players.get("LAR").displayName()).isEqualTo("Los Angeles Rams");
+        assertThat(players.get("LAR").age()).isNull();
     }
 
     @Test

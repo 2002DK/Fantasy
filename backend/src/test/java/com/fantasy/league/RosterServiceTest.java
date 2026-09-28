@@ -2,10 +2,17 @@ package com.fantasy.league;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +21,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.fantasy.league.RosterResponse.Starter;
+import com.fantasy.player.PlayerService;
+import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperLeagueUser;
@@ -27,11 +36,19 @@ class RosterServiceTest {
     @Mock
     private SleeperClient sleeperClient;
 
+    @Mock
+    private PlayerService playerService;
+
     private RosterService service;
 
     @BeforeEach
     void setUp() {
-        service = new RosterService(sleeperClient);
+        service = new RosterService(sleeperClient, playerService);
+        // Every ID resolves to a player named "P<id>"
+        lenient().when(playerService.findSummaries(any())).thenAnswer(invocation -> {
+            Collection<String> ids = invocation.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(Function.identity(), RosterServiceTest::player));
+        });
     }
 
     @Test
@@ -51,11 +68,11 @@ class RosterServiceTest {
 
         assertThat(response.rosterId()).isEqualTo(2);
         assertThat(response.starters()).containsExactly(
-                new Starter("QB", "100"), new Starter("RB", "200"),
-                new Starter("FLEX", "300"), new Starter("DEF", "CLE"));
-        assertThat(response.bench()).containsExactly("400");
-        assertThat(response.reserve()).containsExactly("500");
-        assertThat(response.taxi()).containsExactly("600");
+                new Starter("QB", player("100")), new Starter("RB", player("200")),
+                new Starter("FLEX", player("300")), new Starter("DEF", player("CLE")));
+        assertThat(response.bench()).containsExactly(player("400"));
+        assertThat(response.reserve()).containsExactly(player("500"));
+        assertThat(response.taxi()).containsExactly(player("600"));
         assertThat(response.owner()).isEqualTo(new RosterResponse.Owner(
                 "me", "Dani", "Giant Dolphins", "https://sleepercdn.com/avatars/thumbs/abc"));
         assertThat(response.record()).isEqualTo(new RosterResponse.TeamRecord(7, 6, 0, 1776.06, 1695.36));
@@ -70,8 +87,21 @@ class RosterServiceTest {
 
         RosterResponse response = service.findRoster(LEAGUE_ID, "me");
 
-        assertThat(response.starters()).containsExactly(new Starter("QB", "100"), new Starter("RB", null));
+        assertThat(response.starters()).containsExactly(new Starter("QB", player("100")), new Starter("RB", null));
         assertThat(response.bench()).isEmpty();
+    }
+
+    @Test
+    void resolvesAllPlayersInOneLookupWithoutTheEmptySlotMarker() {
+        givenLeague(List.of("QB", "RB", "BN"));
+        given(sleeperClient.getRosters(LEAGUE_ID)).willReturn(List.of(
+                roster(1, "me", null, List.of("100", "400"), List.of("100", "0"), null, null)));
+        given(sleeperClient.getLeagueUsers(LEAGUE_ID)).willReturn(List.of());
+
+        service.findRoster(LEAGUE_ID, "me");
+
+        verify(playerService).findSummaries(
+                argThat(ids -> ids.size() == 2 && ids.containsAll(List.of("100", "400"))));
     }
 
     @Test
@@ -112,6 +142,10 @@ class RosterServiceTest {
     private void givenLeague(List<String> rosterPositions) {
         given(sleeperClient.getLeague(LEAGUE_ID)).willReturn(Optional.of(
                 new SleeperLeague(LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, rosterPositions)));
+    }
+
+    private static PlayerSummary player(String id) {
+        return new PlayerSummary(id, "P" + id, "RB", "PHI", null);
     }
 
     private static SleeperRoster roster(int id, String ownerId, List<String> coOwners, List<String> players,

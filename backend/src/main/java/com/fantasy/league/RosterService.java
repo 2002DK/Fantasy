@@ -4,11 +4,15 @@ import static com.fantasy.sleeper.SleeperAvatars.thumbUrl;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
+import com.fantasy.player.PlayerService;
+import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperLeagueUser;
@@ -21,9 +25,11 @@ public class RosterService {
     private static final String EMPTY_SLOT_PLAYER_ID = "0";
 
     private final SleeperClient sleeperClient;
+    private final PlayerService playerService;
 
-    public RosterService(SleeperClient sleeperClient) {
+    public RosterService(SleeperClient sleeperClient, PlayerService playerService) {
         this.sleeperClient = sleeperClient;
+        this.playerService = playerService;
     }
 
     /** Finds the roster the user owns or co-owns in the league. */
@@ -41,8 +47,16 @@ public class RosterService {
                 .orElse(null);
 
         List<String> starterIds = orEmpty(roster.starters());
-        List<String> reserve = orEmpty(roster.reserve());
-        List<String> taxi = orEmpty(roster.taxi());
+        List<String> reserveIds = orEmpty(roster.reserve());
+        List<String> taxiIds = orEmpty(roster.taxi());
+        List<String> benchIds = bench(orEmpty(roster.players()), starterIds, reserveIds, taxiIds);
+
+        Set<String> allIds = new LinkedHashSet<>(starterIds);
+        allIds.addAll(benchIds);
+        allIds.addAll(reserveIds);
+        allIds.addAll(taxiIds);
+        allIds.remove(EMPTY_SLOT_PLAYER_ID);
+        Map<String, PlayerSummary> players = playerService.findSummaries(allIds);
 
         return new RosterResponse(
                 league.leagueId(),
@@ -50,19 +64,20 @@ public class RosterService {
                 roster.rosterId(),
                 toOwner(roster.ownerId(), owner),
                 toRecord(roster.settings()),
-                toStarters(orEmpty(league.rosterPositions()), starterIds),
-                bench(orEmpty(roster.players()), starterIds, reserve, taxi),
-                reserve,
-                taxi);
+                toStarters(orEmpty(league.rosterPositions()), starterIds, players),
+                benchIds.stream().map(players::get).toList(),
+                reserveIds.stream().map(players::get).toList(),
+                taxiIds.stream().map(players::get).toList());
     }
 
     /** Pairs each non-bench slot with the starter in the same position of the starters list. */
-    private static List<RosterResponse.Starter> toStarters(List<String> rosterPositions, List<String> starterIds) {
+    private static List<RosterResponse.Starter> toStarters(List<String> rosterPositions, List<String> starterIds,
+            Map<String, PlayerSummary> players) {
         List<String> slots = rosterPositions.stream().filter(slot -> !BENCH_SLOT.equals(slot)).toList();
         List<RosterResponse.Starter> starters = new ArrayList<>();
         for (int i = 0; i < slots.size(); i++) {
             String playerId = i < starterIds.size() ? starterIds.get(i) : null;
-            starters.add(new RosterResponse.Starter(slots.get(i), EMPTY_SLOT_PLAYER_ID.equals(playerId) ? null : playerId));
+            starters.add(new RosterResponse.Starter(slots.get(i), playerId != null ? players.get(playerId) : null));
         }
         return starters;
     }

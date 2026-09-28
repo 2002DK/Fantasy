@@ -1,6 +1,7 @@
 package com.fantasy.sleeper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -64,6 +65,18 @@ public class SleeperClient {
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<SleeperRoster>>() {});
         return rosters != null ? rosters : List.of();
+    }
+
+    /**
+     * The full NFL player database (~15 MB), keyed by player ID. Sleeper asks callers
+     * to fetch this at most once a day; see {@code PlayerSyncService}.
+     */
+    public Map<String, SleeperPlayer> getAllPlayers() {
+        Map<String, SleeperPlayer> players = restClient.get()
+                .uri("/players/nfl")
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, SleeperPlayer>>() {});
+        return players != null ? players : Map.of();
     }
 
     public List<SleeperLeagueUser> getLeagueUsers(String leagueId) {
