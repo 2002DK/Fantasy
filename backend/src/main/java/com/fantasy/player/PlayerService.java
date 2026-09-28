@@ -2,6 +2,7 @@ package com.fantasy.player;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -14,6 +15,10 @@ public class PlayerService {
 
     public PlayerService(PlayerRepository playerRepository) {
         this.playerRepository = playerRepository;
+    }
+
+    public Optional<PlayerSummary> findSummary(String playerId) {
+        return playerRepository.findById(playerId).map(PlayerSummary::from);
     }
 
     /**

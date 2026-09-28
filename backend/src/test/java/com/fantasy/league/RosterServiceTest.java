@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -141,7 +142,7 @@ class RosterServiceTest {
 
     private void givenLeague(List<String> rosterPositions) {
         given(sleeperClient.getLeague(LEAGUE_ID)).willReturn(Optional.of(
-                new SleeperLeague(LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, rosterPositions)));
+                new SleeperLeague(LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, rosterPositions, Map.of())));
     }
 
     private static PlayerSummary player(String id) {

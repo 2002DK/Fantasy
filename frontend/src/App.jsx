@@ -23,6 +23,7 @@ function App() {
   } else if (leagueId && !leagues.error) {
     content = (
       <RosterView
+        key={leagueId}
         roster={leagues.loading ? leagues : roster}
         onBack={() => navigate({ username, season })}
       />

@@ -1,33 +1,9 @@
+import { useState } from 'react'
+import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
+import StartSitPanel from './StartSitPanel.jsx'
 import { ErrorMessage, Loading } from './Status.jsx'
 
-const INJURY_ABBREVIATIONS = {
-  Questionable: 'Q',
-  Doubtful: 'D',
-  Out: 'O',
-  IR: 'IR',
-  PUP: 'PUP',
-  Sus: 'SUS',
-  NA: 'NA',
-}
-
-function InjuryTag({ status }) {
-  if (!status) return null
-  const severity = status === 'Questionable' ? 'minor' : 'major'
-  return (
-    <span className={`tag injury ${severity}`} title={status}>
-      {INJURY_ABBREVIATIONS[status] ?? status}
-    </span>
-  )
-}
-
-function PositionChip({ position }) {
-  return <span className={`pos pos-${position ?? 'unknown'}`}>{position ?? '?'}</span>
-}
-
 function PlayerCells({ player }) {
-  if (!player) {
-    return <span className="player-name muted">Empty</span>
-  }
   return (
     <>
       <span className="player-name">
@@ -39,7 +15,23 @@ function PlayerCells({ player }) {
   )
 }
 
-function PlayerSection({ title, players }) {
+/** A roster row that toggles the player in or out of the start/sit comparison. */
+function SelectableRow({ player, selected, onToggle, children }) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={`player-row selectable${selected ? ' selected' : ''}`}
+        aria-pressed={selected}
+        onClick={() => onToggle(player.playerId)}
+      >
+        {children}
+      </button>
+    </li>
+  )
+}
+
+function PlayerSection({ title, players, selection }) {
   if (players.length === 0) return null
   return (
     <section className="card roster-section">
@@ -48,10 +40,10 @@ function PlayerSection({ title, players }) {
       </h3>
       <ul className="player-list">
         {players.map((player) => (
-          <li key={player.playerId} className="player-row">
+          <SelectableRow key={player.playerId} player={player} {...selection(player.playerId)}>
             <PositionChip position={player.position} />
             <PlayerCells player={player} />
-          </li>
+          </SelectableRow>
         ))}
       </ul>
     </section>
@@ -63,6 +55,7 @@ function formatPoints(points) {
 }
 
 export default function RosterView({ roster, onBack }) {
+  const [selectedIds, setSelectedIds] = useState([])
   const { data, error, loading } = roster
   const backButton = (
     <button type="button" className="link back" onClick={onBack}>
@@ -73,6 +66,14 @@ export default function RosterView({ roster, onBack }) {
   if (loading) return <Loading label="Loading roster…" />
   if (error) return <ErrorMessage error={error} action={backButton} />
   if (!data) return null
+
+  /** Up to two players; picking a third replaces the most recent pick. */
+  function toggle(playerId) {
+    setSelectedIds((ids) =>
+      ids.includes(playerId) ? ids.filter((id) => id !== playerId) : [ids[0], playerId].filter(Boolean).slice(-2),
+    )
+  }
+  const selection = (playerId) => ({ selected: selectedIds.includes(playerId), onToggle: toggle })
 
   const { owner, record } = data
   const hasPlayers = data.starters.some((s) => s.player) || data.bench.length > 0 || data.reserve.length > 0
@@ -109,21 +110,37 @@ export default function RosterView({ roster, onBack }) {
         <p className="status">No players on this roster yet. The league may not have drafted.</p>
       ) : (
         <>
+          {selectedIds.length === 2 ? (
+            <StartSitPanel leagueId={data.leagueId} playerIds={selectedIds} onClear={() => setSelectedIds([])} />
+          ) : (
+            <p className="hint muted">
+              {selectedIds.length === 0
+                ? 'Start/sit: tap two players to compare who to start this week.'
+                : 'Pick one more player to compare.'}
+            </p>
+          )}
           <section className="card roster-section">
             <h3>Starters</h3>
             <ul className="player-list">
-              {data.starters.map((starter, i) => (
-                <li key={i} className="player-row">
-                  <span className="slot">{starter.slot.replace('_', ' ')}</span>
-                  <PlayerCells player={starter.player} />
-                  {starter.player && <PositionChip position={starter.player.position} />}
-                </li>
-              ))}
+              {data.starters.map((starter, i) =>
+                starter.player ? (
+                  <SelectableRow key={i} player={starter.player} {...selection(starter.player.playerId)}>
+                    <span className="slot">{starter.slot.replace('_', ' ')}</span>
+                    <PlayerCells player={starter.player} />
+                    <PositionChip position={starter.player.position} />
+                  </SelectableRow>
+                ) : (
+                  <li key={i} className="player-row">
+                    <span className="slot">{starter.slot.replace('_', ' ')}</span>
+                    <span className="player-name muted">Empty</span>
+                  </li>
+                ),
+              )}
             </ul>
           </section>
-          <PlayerSection title="Bench" players={data.bench} />
-          <PlayerSection title="Injured reserve" players={data.reserve} />
-          <PlayerSection title="Taxi squad" players={data.taxi} />
+          <PlayerSection title="Bench" players={data.bench} selection={selection} />
+          <PlayerSection title="Injured reserve" players={data.reserve} selection={selection} />
+          <PlayerSection title="Taxi squad" players={data.taxi} selection={selection} />
         </>
       )}
     </section>

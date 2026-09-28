@@ -53,7 +53,7 @@ class SleeperClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         assertThat(client.getLeagues("123", "2026"))
-                .isEqualTo(List.of(new SleeperLeague("L1", "Dynasty", "2026", "in_season", 12, null, null)));
+                .isEqualTo(List.of(new SleeperLeague("L1", "Dynasty", "2026", "in_season", 12, null, null, null)));
     }
 
     @Test

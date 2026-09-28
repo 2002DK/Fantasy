@@ -7,6 +7,7 @@
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-text: #ffffff;
+  --accent-soft: #eef4ff;
   --danger: #b42318;
   --danger-bg: #fef3f2;
   --warn: #9a6700;
@@ -38,6 +39,7 @@
     --accent: #4c8dff;
     --accent-hover: #6ba1ff;
     --accent-text: #0b1020;
+    --accent-soft: #17233b;
     --danger: #ff8a80;
     --danger-bg: #2a1614;
     --warn: #f5c451;
@@ -385,16 +387,157 @@ select {
   margin: 0;
 }
 
+.player-list > li + li {
+  border-top: 1px solid var(--border);
+}
+
 .player-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 0;
-  border-top: 1px solid var(--border);
 }
 
-.player-row:first-child {
-  border-top: none;
+/* Roster rows are buttons that pick players for the start/sit comparison */
+.player-row.selectable {
+  padding: 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-weight: 400;
+  text-align: left;
+}
+
+.player-row.selectable:hover {
+  background: var(--bg);
+}
+
+.player-row.selectable.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 0.875rem;
+}
+
+/* Start/sit comparison */
+
+.start-sit {
+  margin-top: 12px;
+  border-color: var(--accent);
+}
+
+.start-sit-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.start-sit-header > div {
+  flex: 1;
+  min-width: 180px;
+}
+
+.start-sit-header .muted {
+  font-size: 0.8125rem;
+}
+
+.start-sit-header h3 {
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.tag.confidence-CLEAR {
+  color: var(--pos-RB);
+  border-color: currentColor;
+}
+
+.tag.confidence-LEAN {
+  color: var(--accent);
+  border-color: currentColor;
+}
+
+.tag.confidence-TOSS_UP {
+  color: var(--warn);
+  border-color: currentColor;
+}
+
+.comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.comparison-player {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.comparison-player.recommended {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.comparison-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 12px 0 0;
+}
+
+.comparison-stats .wide {
+  grid-column: 1 / -1;
+}
+
+.comparison-stats dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.comparison-stats dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.comparison-stats .score {
+  font-size: 1.125rem;
+}
+
+.unavailable {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.reasons,
+.notes {
+  margin: 12px 0 0;
+  padding-left: 20px;
+}
+
+.reasons li + li,
+.notes li + li {
+  margin-top: 4px;
+}
+
+.notes {
+  font-size: 0.8125rem;
 }
 
 .slot {

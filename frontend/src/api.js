@@ -21,6 +21,11 @@ export function fetchLeagues(username, season, signal) {
   return getJson(`/api/users/${encodeURIComponent(username)}/leagues${query}`, signal)
 }
 
+export function fetchStartSit(leagueId, playerA, playerB, signal) {
+  const query = new URLSearchParams({ playerA, playerB })
+  return getJson(`/api/leagues/${encodeURIComponent(leagueId)}/start-sit?${query}`, signal)
+}
+
 export function fetchRoster(leagueId, userId, signal) {
   return getJson(
     `/api/leagues/${encodeURIComponent(leagueId)}/users/${encodeURIComponent(userId)}/roster`,
