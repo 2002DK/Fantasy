@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.ResourceAccessException;
 
 import com.fantasy.league.InvalidRequestException;
+import com.fantasy.league.SeasonCalendar;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.NflState;
@@ -57,7 +58,8 @@ class StartSitServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new StartSitService(sleeperClient, weeklyData, playerService);
+        service = new StartSitService(sleeperClient, playerService, new WeeklyScorer(weeklyData),
+                new SeasonCalendar(sleeperClient));
         lenient().when(sleeperClient.getLeague(LEAGUE_ID)).thenReturn(Optional.of(new SleeperLeague(
                 LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, List.of(), Map.of("rush_yd", 0.1), null)));
         lenient().when(sleeperClient.getNflState()).thenReturn(new NflState("2026", 3, "regular"));

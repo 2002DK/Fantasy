@@ -1,76 +1,46 @@
 package com.fantasy.startsit;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
 
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.NotFoundException;
+import com.fantasy.league.SeasonCalendar;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
-import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
-import com.fantasy.sleeper.SleeperWeeklyEntry;
-import com.fantasy.stats.DefenseTable;
-import com.fantasy.stats.Positions;
-import com.fantasy.stats.ScoringCalculator;
-import com.fantasy.stats.WeeklyDataService;
 import com.fantasy.startsit.StartSitResponse.Confidence;
 import com.fantasy.startsit.StartSitResponse.Matchup;
 import com.fantasy.startsit.StartSitResponse.PlayerAnalysis;
-import com.fantasy.startsit.StartSitResponse.RecentGame;
 import com.fantasy.startsit.StartSitResponse.Recommendation;
+import com.fantasy.stats.Positions;
+import com.fantasy.stats.ScoringCalculator;
 
 /**
- * Recommends which of two players to start in a given week.
- *
- * <p>Score = 60% projected points + 40% recent form, with recent form scaled by
- * matchup (up to ±15%). Projections already account for the opponent, so matchup
- * only adjusts form, which does not. Unavailable players score 0; Questionable and
- * Doubtful players are discounted. All points use the league's own scoring.
+ * Recommends which of two players to start in a given week, using {@link WeeklyScorer}
+ * for each player's expected points and explaining the difference in plain English.
  */
 @Service
 public class StartSitService {
 
-    static final double PROJECTION_WEIGHT = 0.6;
-    static final double FORM_WEIGHT = 0.4;
-    static final double MAX_MATCHUP_ADJUSTMENT = 0.15;
-    static final int FORM_GAMES = 3;
     static final double TOSS_UP_MARGIN = 0.05;
     static final double LEAN_MARGIN = 0.15;
-    static final int LAST_REGULAR_SEASON_WEEK = 18;
-    /** Below this many completed weeks, points-allowed rankings are mostly noise. */
-    static final int RELIABLE_MATCHUP_WEEKS = 4;
-
-    private static final Set<String> UNAVAILABLE_STATUSES = Set.of("Out", "IR", "PUP", "Sus", "NA", "COV", "DNR");
-    private static final Map<String, Double> INJURY_DISCOUNTS = Map.of("Questionable", 0.9, "Doubtful", 0.5);
-
-    private static final Logger log = LoggerFactory.getLogger(StartSitService.class);
-
-    private record Opponent(String team, boolean home, String gameStatus) {
-
-        boolean kickedOff() {
-            return !"pre_game".equals(gameStatus);
-        }
-    }
 
     private final SleeperClient sleeperClient;
-    private final WeeklyDataService weeklyData;
     private final PlayerService playerService;
+    private final WeeklyScorer scorer;
+    private final SeasonCalendar calendar;
 
-    public StartSitService(SleeperClient sleeperClient, WeeklyDataService weeklyData, PlayerService playerService) {
+    public StartSitService(SleeperClient sleeperClient, PlayerService playerService, WeeklyScorer scorer,
+            SeasonCalendar calendar) {
         this.sleeperClient = sleeperClient;
-        this.weeklyData = weeklyData;
         this.playerService = playerService;
+        this.scorer = scorer;
+        this.calendar = calendar;
     }
 
     public StartSitResponse compare(String leagueId, String playerAId, String playerBId, Integer requestedWeek) {
@@ -79,45 +49,33 @@ public class StartSitService {
         }
         SleeperLeague league = sleeperClient.getLeague(leagueId)
                 .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));
-        String season = league.season();
-        int week = resolveWeek(season, requestedWeek);
-        Map<String, Double> scoring = league.scoringSettings() != null ? league.scoringSettings() : Map.of();
+        int week = requestedWeek != null ? requestedWeek : currentWeekOrAsk(league);
         PlayerSummary playerA = findPlayer(playerAId);
         PlayerSummary playerB = findPlayer(playerBId);
 
-        List<String> notes = new ArrayList<>();
-        Map<String, Opponent> opponents = loadOpponents(season, week, notes);
-        Map<String, SleeperWeeklyEntry> projections = loadProjections(season, week, notes);
-        List<List<SleeperWeeklyEntry>> pastWeeks = loadPastWeeks(season, week, notes);
-        DefenseTable defenses = DefenseTable.from(pastWeeks);
-        if (!pastWeeks.isEmpty() && pastWeeks.size() < RELIABLE_MATCHUP_WEEKS) {
-            notes.add("Matchup rankings use only %s of games so far, so treat them as rough."
-                    .formatted(pastWeeks.size() == 1 ? "1 week" : pastWeeks.size() + " weeks"));
-        }
-
-        PlayerAnalysis a = analyze(playerA, scoring, opponents, projections, pastWeeks, defenses);
-        PlayerAnalysis b = analyze(playerB, scoring, opponents, projections, pastWeeks, defenses);
+        WeeklyScorer.Week data = scorer.load(league, week);
+        List<String> notes = new ArrayList<>(data.notes());
+        PlayerAnalysis a = scorer.analyze(playerA, data);
+        PlayerAnalysis b = scorer.analyze(playerB, data);
         Recommendation recommendation = recommend(a, b);
         for (PlayerSummary player : List.of(playerA, playerB)) {
-            Opponent opponent = opponents != null && player.team() != null ? opponents.get(player.team()) : null;
-            if (opponent != null && opponent.kickedOff()) {
+            if (data.isLocked(player)) {
                 notes.add("%s's week %d game has already kicked off, so that lineup spot is locked."
                         .formatted(Optional.ofNullable(player.name()).orElse("Player " + player.playerId()), week));
             }
         }
-
-        return new StartSitResponse(season, week, recommendation, List.of(a, b), reasons(a, b, recommendation), notes);
+        return new StartSitResponse(league.season(), week, recommendation, List.of(a, b), reasons(a, b, recommendation),
+                notes);
     }
 
-    private int resolveWeek(String season, Integer requestedWeek) {
-        if (requestedWeek != null) {
-            return requestedWeek;
+    /** A past-season league has no current week, so the caller must choose one. */
+    private int currentWeekOrAsk(SleeperLeague league) {
+        try {
+            return calendar.currentWeek(league);
+        } catch (InvalidRequestException e) {
+            throw new InvalidRequestException(
+                    "This league is from the " + league.season() + " season; choose a week to compare");
         }
-        var state = sleeperClient.getNflState();
-        if (!season.equals(state.season())) {
-            throw new InvalidRequestException("This league is from the " + season + " season; choose a week to compare");
-        }
-        return Math.clamp(state.week(), 1, LAST_REGULAR_SEASON_WEEK);
     }
 
     private PlayerSummary findPlayer(String playerId) {
@@ -125,137 +83,9 @@ public class StartSitService {
                 .orElseThrow(() -> new NotFoundException("No player found with ID '" + playerId + "'"));
     }
 
-    // --- Data loading: each source may fail independently; the comparison uses what it gets ---
-
-    private Map<String, Opponent> loadOpponents(String season, int week, List<String> notes) {
-        try {
-            Map<String, Opponent> opponents = new HashMap<>();
-            for (SleeperGame game : weeklyData.schedule(season)) {
-                if (game.week() == week && !game.isCanceled()) {
-                    opponents.put(game.home(), new Opponent(game.away(), true, game.status()));
-                    opponents.put(game.away(), new Opponent(game.home(), false, game.status()));
-                }
-            }
-            return opponents;
-        } catch (RestClientException e) {
-            log.warn("Schedule unavailable for {}", season, e);
-            notes.add("The NFL schedule is unavailable right now, so byes and matchups are not checked.");
-            return null;
-        }
-    }
-
-    private Map<String, SleeperWeeklyEntry> loadProjections(String season, int week, List<String> notes) {
-        try {
-            Map<String, SleeperWeeklyEntry> byPlayer = new HashMap<>();
-            weeklyData.projections(season, week).forEach(entry -> byPlayer.put(entry.playerId(), entry));
-            return byPlayer;
-        } catch (RestClientException e) {
-            log.warn("Projections unavailable for {} week {}", season, week, e);
-            notes.add("Projections are unavailable right now; this uses recent form and matchup only.");
-            return Map.of();
-        }
-    }
-
-    /** Completed weeks, newest first. */
-    private List<List<SleeperWeeklyEntry>> loadPastWeeks(String season, int week, List<String> notes) {
-        if (week == 1) {
-            notes.add("No games have been played yet this season, so recent form and matchup data are not available.");
-            return List.of();
-        }
-        try {
-            List<List<SleeperWeeklyEntry>> weeks = new ArrayList<>();
-            for (int w = week - 1; w >= 1; w--) {
-                weeks.add(weeklyData.stats(season, w));
-            }
-            return weeks;
-        } catch (RestClientException e) {
-            log.warn("Weekly stats unavailable for {}", season, e);
-            notes.add("Past game stats are unavailable right now; this uses projections only.");
-            return List.of();
-        }
-    }
-
-    // --- Per-player analysis ---
-
-    private PlayerAnalysis analyze(PlayerSummary player, Map<String, Double> scoring, Map<String, Opponent> opponents,
-            Map<String, SleeperWeeklyEntry> projections, List<List<SleeperWeeklyEntry>> pastWeeks,
-            DefenseTable defenses) {
-        SleeperWeeklyEntry projection = projections.get(player.playerId());
-        Double projected = projection != null ? ScoringCalculator.points(projection, scoring) : null;
-
-        List<RecentGame> recentGames = recentGames(player.playerId(), pastWeeks, scoring);
-        Double recentAverage = recentGames.isEmpty() ? null
-                : ScoringCalculator.round(recentGames.stream().mapToDouble(RecentGame::points).average().orElse(0));
-
-        Opponent opponent = opponents != null && player.team() != null ? opponents.get(player.team()) : null;
-        Matchup matchup = opponent == null ? null : matchup(opponent, player.position(), defenses);
-
-        String unavailableReason = unavailableReason(player, opponents, opponent);
-        if (unavailableReason != null) {
-            return new PlayerAnalysis(player, false, unavailableReason, projected, recentAverage, recentGames,
-                    matchup, 0.0);
-        }
-        Double score = score(projected, recentAverage, matchup);
-        // Map.of rejects null lookups, and healthy players have a null injury status
-        Double discount = player.injuryStatus() != null ? INJURY_DISCOUNTS.get(player.injuryStatus()) : null;
-        if (score != null && discount != null) {
-            score *= discount;
-        }
-        return new PlayerAnalysis(player, true, discount != null ? player.injuryStatus() : null,
-                projected, recentAverage, recentGames, matchup, score != null ? ScoringCalculator.round(score) : null);
-    }
-
-    private static String unavailableReason(PlayerSummary player, Map<String, Opponent> opponents, Opponent opponent) {
-        if (player.injuryStatus() != null && UNAVAILABLE_STATUSES.contains(player.injuryStatus())) {
-            return player.injuryStatus();
-        }
-        if (player.team() == null) {
-            return "Not on an NFL team";
-        }
-        if (opponents != null && opponent == null) {
-            return "On bye";
-        }
-        return null;
-    }
-
-    private static List<RecentGame> recentGames(String playerId, List<List<SleeperWeeklyEntry>> pastWeeks,
-            Map<String, Double> scoring) {
-        List<RecentGame> games = new ArrayList<>();
-        for (List<SleeperWeeklyEntry> week : pastWeeks) {
-            week.stream()
-                    .filter(e -> playerId.equals(e.playerId()) && e.played())
-                    .findFirst()
-                    .ifPresent(e -> games.add(new RecentGame(e.week(), e.opponent(), ScoringCalculator.points(e, scoring))));
-            if (games.size() == FORM_GAMES) {
-                break;
-            }
-        }
-        return games;
-    }
-
-    private static Matchup matchup(Opponent opponent, String position, DefenseTable defenses) {
-        return defenses.standing(opponent.team(), position)
-                .map(s -> new Matchup(opponent.team(), opponent.home(), s.rank(), s.teams(),
-                        ScoringCalculator.round(s.allowedPerGame()), ScoringCalculator.round(s.leagueAverage())))
-                .orElse(new Matchup(opponent.team(), opponent.home(), null, null, null, null));
-    }
-
-    /** Scales form by how the opponent's points allowed compare to the league average, capped at ±15%. */
+    /** Kept for tests and callers of the start/sit model. */
     static double matchupMultiplier(Matchup matchup) {
-        if (matchup == null || matchup.allowedPerGame() == null || matchup.leagueAverage() == null
-                || matchup.leagueAverage() <= 0) {
-            return 1.0;
-        }
-        double ratio = matchup.allowedPerGame() / matchup.leagueAverage();
-        return Math.clamp(ratio, 1 - MAX_MATCHUP_ADJUSTMENT, 1 + MAX_MATCHUP_ADJUSTMENT);
-    }
-
-    private static Double score(Double projected, Double recentAverage, Matchup matchup) {
-        Double adjustedForm = recentAverage != null ? recentAverage * matchupMultiplier(matchup) : null;
-        if (projected != null && adjustedForm != null) {
-            return PROJECTION_WEIGHT * projected + FORM_WEIGHT * adjustedForm;
-        }
-        return projected != null ? projected : adjustedForm;
+        return WeeklyScorer.matchupMultiplier(matchup);
     }
 
     // --- Decision and explanation ---

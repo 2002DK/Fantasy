@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.ResourceAccessException;
 
 import com.fantasy.league.InvalidRequestException;
+import com.fantasy.league.SeasonCalendar;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.NflState;
@@ -69,7 +70,8 @@ class TradeServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TradeService(sleeperClient, weeklyData, playerService);
+        service = new TradeService(sleeperClient, playerService, new SeasonValuer(weeklyData, playerService),
+                new SeasonCalendar(sleeperClient));
         givenLeague(List.of("RB", "BN"), new SleeperLeague.Settings(4, 2, 0));
         lenient().when(sleeperClient.getNflState()).thenReturn(new NflState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA, CEE, DEE);
