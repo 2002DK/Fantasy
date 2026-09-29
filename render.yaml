@@ -1,0 +1,22 @@
+# Render Blueprint: one Docker web service on the free plan.
+# The database is Neon's free Postgres (Render's free Postgres is deleted after 30 days).
+# Create the service from the Render dashboard with New > Blueprint and this repo;
+# Render then asks for the three DATABASE_* values below.
+services:
+  - name: fantasy-app
+    type: web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    autoDeployTrigger: commit
+    envVars:
+      # JDBC URL, e.g. jdbc:postgresql://ep-example-123.us-east-2.aws.neon.tech/neondb?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false

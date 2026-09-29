@@ -6,7 +6,6 @@ import com.fantasy.sleeper.SleeperPlayer;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Index;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
@@ -14,7 +13,7 @@ import jakarta.persistence.Transient;
 
 /** Cached copy of a Sleeper player, trimmed to the fields the app uses. */
 @Entity
-@Table(name = "player", indexes = @Index(columnList = "position"))
+@Table(name = "player")
 public class Player implements Persistable<String> {
 
     @Id

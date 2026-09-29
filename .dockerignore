@@ -1,0 +1,11 @@
+.git
+.claude
+.idea
+.vscode
+**/node_modules
+frontend/dist
+backend/target
+backend/data
+backend/src/main/resources/static
+*.log
+.env

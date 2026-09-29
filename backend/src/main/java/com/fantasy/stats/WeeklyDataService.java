@@ -27,6 +27,8 @@ public class WeeklyDataService {
     private record SeasonWeek(String season, int week) {
     }
 
+    static final int MAX_PARALLEL_DOWNLOADS = 4;
+
     private final SleeperStatsClient statsClient;
     /** Projections are revised through the week as injury news lands. */
     private final TtlCache<SeasonWeek, List<SleeperWeeklyEntry>> projections;
@@ -52,11 +54,14 @@ public class WeeklyDataService {
 
     /**
      * Projections for weeks {@code from} through {@code to}, keyed by week, fetched in
-     * parallel so a cold cache costs one round trip rather than one per week.
+     * parallel so a cold cache costs a few round trips rather than one per week. Each
+     * response is ~2 MB of JSON, so at most {@link #MAX_PARALLEL_DOWNLOADS} are parsed
+     * at once to keep memory within a small (512 MB) host.
      */
     public Map<Integer, List<SleeperWeeklyEntry>> projections(String season, int from, int to) {
         Map<Integer, List<SleeperWeeklyEntry>> byWeek = new TreeMap<>();
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (ExecutorService executor = Executors.newFixedThreadPool(MAX_PARALLEL_DOWNLOADS,
+                Thread.ofVirtual().factory())) {
             Map<Integer, Future<List<SleeperWeeklyEntry>>> futures = new TreeMap<>();
             for (int week = from; week <= to; week++) {
                 int w = week;
