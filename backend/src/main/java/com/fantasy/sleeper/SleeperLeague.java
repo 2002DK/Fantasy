@@ -18,10 +18,22 @@ public record SleeperLeague(
         @JsonProperty("scoring_settings") Map<String, Double> scoringSettings,
         @JsonProperty("settings") Settings settings) {
 
-    /** playoff_week_start and trade_deadline are 0 when the league has not set them. */
+    /**
+     * playoff_week_start and trade_deadline are 0 when the league has not set them.
+     * league_average_match is 1 when teams also play the weekly league median.
+     */
     public record Settings(
             @JsonProperty("playoff_week_start") int playoffWeekStart,
             @JsonProperty("playoff_teams") int playoffTeams,
-            @JsonProperty("trade_deadline") int tradeDeadline) {
+            @JsonProperty("trade_deadline") int tradeDeadline,
+            @JsonProperty("league_average_match") int leagueAverageMatch) {
+
+        public Settings(int playoffWeekStart, int playoffTeams, int tradeDeadline) {
+            this(playoffWeekStart, playoffTeams, tradeDeadline, 0);
+        }
+
+        public boolean playsMedian() {
+            return leagueAverageMatch == 1;
+        }
     }
 }

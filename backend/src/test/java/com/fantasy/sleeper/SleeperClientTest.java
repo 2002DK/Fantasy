@@ -114,6 +114,39 @@ class SleeperClientTest {
     }
 
     @Test
+    void getMatchupsReadsPairingsAndLivePoints() {
+        server.expect(requestTo(BASE + "/league/L1/matchups/4"))
+                .andRespond(withSuccess("""
+                        [{"points":114.1,"players":["1","2"],"roster_id":1,"custom_points":null,"matchup_id":2,
+                          "starters":["1","0"],"starters_points":[14.1,0],"players_points":{"1":14.1,"2":3.0}},
+                         {"points":0,"players":[],"roster_id":5,"custom_points":null,"matchup_id":null,
+                          "starters":[],"starters_points":[],"players_points":{}}]
+                        """, MediaType.APPLICATION_JSON));
+
+        List<SleeperMatchup> matchups = client.getMatchups("L1", 4);
+
+        assertThat(matchups.getFirst().matchupId()).isEqualTo(2);
+        assertThat(matchups.getFirst().starters()).containsExactly("1", "0");
+        assertThat(matchups.getFirst().playersPoints()).containsEntry("1", 14.1);
+        assertThat(matchups.get(1).matchupId()).isNull();
+    }
+
+    @Test
+    void getLeagueReadsPlayoffAndMedianSettings() {
+        server.expect(requestTo(BASE + "/league/L1"))
+                .andRespond(withSuccess("""
+                        {"league_id":"L1","name":"Dynasty","season":"2026","status":"in_season","total_rosters":12,
+                         "settings":{"playoff_week_start":15,"playoff_teams":6,"trade_deadline":11,
+                                     "league_average_match":1,"waiver_type":2}}
+                        """, MediaType.APPLICATION_JSON));
+
+        SleeperLeague.Settings settings = client.getLeague("L1").orElseThrow().settings();
+
+        assertThat(settings).isEqualTo(new SleeperLeague.Settings(15, 6, 11, 1));
+        assertThat(settings.playsMedian()).isTrue();
+    }
+
+    @Test
     void getAllPlayersReadsMapAndNamesDefenses() {
         server.expect(requestTo(BASE + "/players/nfl"))
                 .andRespond(withSuccess("""

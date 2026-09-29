@@ -79,6 +79,14 @@ public class SleeperClient {
         return players != null ? players : Map.of();
     }
 
+    public List<SleeperMatchup> getMatchups(String leagueId, int week) {
+        List<SleeperMatchup> matchups = restClient.get()
+                .uri("/league/{leagueId}/matchups/{week}", leagueId, week)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<SleeperMatchup>>() {});
+        return matchups != null ? matchups : List.of();
+    }
+
     public List<SleeperLeagueUser> getLeagueUsers(String leagueId) {
         List<SleeperLeagueUser> users = restClient.get()
                 .uri("/league/{leagueId}/users", leagueId)

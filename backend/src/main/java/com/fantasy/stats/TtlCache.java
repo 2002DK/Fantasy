@@ -11,7 +11,7 @@ import java.util.function.Supplier;
  * Minimal time-based cache. A loader that throws caches nothing, so the next call
  * retries. Concurrent misses may load twice, which is fine for idempotent GETs.
  */
-final class TtlCache<K, V> {
+public final class TtlCache<K, V> {
 
     private record Entry<V>(V value, Instant expiresAt) {
     }
@@ -20,12 +20,12 @@ final class TtlCache<K, V> {
     private final Duration ttl;
     private final Clock clock;
 
-    TtlCache(Duration ttl, Clock clock) {
+    public TtlCache(Duration ttl, Clock clock) {
         this.ttl = ttl;
         this.clock = clock;
     }
 
-    V get(K key, Supplier<V> loader) {
+    public V get(K key, Supplier<V> loader) {
         Instant now = clock.instant();
         Entry<V> entry = entries.get(key);
         if (entry != null && entry.expiresAt().isAfter(now)) {

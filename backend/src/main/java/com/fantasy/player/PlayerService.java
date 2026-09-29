@@ -17,6 +17,10 @@ public class PlayerService {
         this.playerRepository = playerRepository;
     }
 
+    public Optional<Player> findPlayer(String playerId) {
+        return playerRepository.findById(playerId);
+    }
+
     public Optional<PlayerSummary> findSummary(String playerId) {
         return playerRepository.findById(playerId).map(PlayerSummary::from);
     }
