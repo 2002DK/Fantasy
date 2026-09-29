@@ -45,8 +45,9 @@ function App() {
       <RosterView
         key={leagueId}
         roster={leagues.loading ? leagues : roster}
+        userId={userId}
         tool={tool}
-        onToolChange={(next) => navigate({ username, season, leagueId, tool: next === 'start-sit' ? null : next })}
+        onToolChange={(next) => navigate({ username, season, leagueId, tool: next === 'lineup' ? null : next })}
         onBack={() => goTo({ username, season })}
       />
     )

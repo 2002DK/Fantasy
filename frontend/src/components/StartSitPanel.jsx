@@ -2,6 +2,7 @@ import { fetchStartSit } from '../api.js'
 import { formatPoints, games, ordinal } from '../format.js'
 import { useApi } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
+import { PlayerLink } from './PlayerDialog.jsx'
 import { ErrorMessage, HowItWorks, Loading } from './Status.jsx'
 
 const CONFIDENCE_LABELS = {
@@ -34,7 +35,9 @@ function PlayerColumn({ analysis, recommended }) {
       <div className="comparison-name">
         <PositionChip position={player.position} />
         <span>
-          <strong>{player.name ?? `Player ${player.playerId}`}</strong>
+          <strong>
+            <PlayerLink player={player} />
+          </strong>
           <InjuryTag status={player.injuryStatus} />
           <span className="muted"> {player.team ?? 'FA'}</span>
         </span>

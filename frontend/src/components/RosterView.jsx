@@ -1,7 +1,13 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatTotal, teamName } from '../format.js'
 import { useDocumentTitle } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
+import LineupOptimizer from './LineupOptimizer.jsx'
+import MatchupView from './MatchupView.jsx'
+import PlannerView from './PlannerView.jsx'
+import PlayerDialogProvider from './PlayerDialog.jsx'
+import { useOpenPlayer } from './playerContext.js'
+import StandingsView from './StandingsView.jsx'
 import StartSitPanel from './StartSitPanel.jsx'
 import { ErrorMessage, RosterSkeleton } from './Status.jsx'
 import TradeView from './TradeView.jsx'
@@ -20,8 +26,9 @@ function PlayerCells({ player }) {
 
 /** A roster row that toggles the player in or out of the start/sit comparison. */
 function SelectableRow({ player, selected, onToggle, children }) {
+  const openPlayer = useOpenPlayer()
   return (
-    <li>
+    <li className="selectable-item">
       <button
         type="button"
         className={`player-row selectable${selected ? ' selected' : ''}`}
@@ -29,6 +36,14 @@ function SelectableRow({ player, selected, onToggle, children }) {
         onClick={() => onToggle(player.playerId)}
       >
         {children}
+      </button>
+      <button
+        type="button"
+        className="info-button"
+        aria-label={`Details for ${player.name ?? 'player'}`}
+        onClick={() => openPlayer(player.playerId)}
+      >
+        i
       </button>
     </li>
   )
@@ -54,9 +69,15 @@ function PlayerSection({ title, players, selection }) {
 }
 
 const TOOLS = [
-  { id: 'start-sit', label: 'Start/Sit' },
+  { id: 'lineup', label: 'Lineup' },
+  { id: 'matchup', label: 'Matchup' },
   { id: 'trade', label: 'Trade' },
+  { id: 'league', label: 'League' },
+  { id: 'planner', label: 'Planner' },
 ]
+
+/** Older links used ?tool=start-sit, which is now part of the Lineup tab. */
+const TOOL_ALIASES = { 'start-sit': 'lineup' }
 
 /**
  * WAI-ARIA tabs: only the active tab is in the Tab order; arrow keys, Home and End
@@ -64,6 +85,11 @@ const TOOLS = [
  */
 function ToolTabs({ activeTool, onToolChange }) {
   const tabRefs = useRef({})
+
+  // On narrow screens the tab strip scrolls sideways; keep the active tab visible
+  useEffect(() => {
+    tabRefs.current[activeTool]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeTool])
 
   function handleKeyDown(event) {
     const index = TOOLS.findIndex((t) => t.id === activeTool)
@@ -120,6 +146,7 @@ function StartSitTool({ data }) {
         <StartSitPanel leagueId={data.leagueId} playerIds={selectedIds} onClear={() => setSelectedIds([])} />
       ) : (
         <p className="hint muted" aria-live="polite">
+          <strong className="hint-title">Start/Sit: </strong>
           {selectedIds.length === 0
             ? 'Tap two players to compare who to start this week.'
             : 'Pick one more player to compare.'}
@@ -155,7 +182,7 @@ function StartSitTool({ data }) {
   )
 }
 
-export default function RosterView({ roster, tool, onToolChange, onBack }) {
+export default function RosterView({ roster, userId, tool, onToolChange, onBack }) {
   const { data, error, loading, retry } = roster
   useDocumentTitle(data ? data.leagueName : null)
   const backButton = (
@@ -171,12 +198,14 @@ export default function RosterView({ roster, tool, onToolChange, onBack }) {
   }
   if (!data) return null
 
-  const activeTool = TOOLS.some((t) => t.id === tool) ? tool : 'start-sit'
+  const requestedTool = TOOL_ALIASES[tool] ?? tool
+  const activeTool = TOOLS.some((t) => t.id === requestedTool) ? requestedTool : 'lineup'
   const { owner, record } = data
   const hasPlayers = data.starters.some((s) => s.player) || data.bench.length > 0 || data.reserve.length > 0
   const recordText = record.ties > 0 ? `${record.wins}–${record.losses}–${record.ties}` : `${record.wins}–${record.losses}`
 
   return (
+    <PlayerDialogProvider leagueId={data.leagueId} userId={userId}>
     <section>
       {backButton}
       <div className="card team-header">
@@ -211,10 +240,22 @@ export default function RosterView({ roster, tool, onToolChange, onBack }) {
         <>
           <ToolTabs activeTool={activeTool} onToolChange={onToolChange} />
           <div role="tabpanel" id={`panel-${activeTool}`} aria-labelledby={`tab-${activeTool}`}>
-            {activeTool === 'trade' ? <TradeView roster={data} /> : <StartSitTool data={data} />}
+            {activeTool === 'lineup' && (
+              <>
+                <LineupOptimizer leagueId={data.leagueId} userId={userId} />
+                <StartSitTool data={data} />
+              </>
+            )}
+            {activeTool === 'matchup' && (
+              <MatchupView leagueId={data.leagueId} userId={userId} onOpenLineup={() => onToolChange('lineup')} />
+            )}
+            {activeTool === 'trade' && <TradeView roster={data} userId={userId} />}
+            {activeTool === 'league' && <StandingsView leagueId={data.leagueId} userId={userId} />}
+            {activeTool === 'planner' && <PlannerView leagueId={data.leagueId} userId={userId} />}
           </div>
         </>
       )}
     </section>
+    </PlayerDialogProvider>
   )
 }

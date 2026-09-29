@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { fetchLeagueTeams, fetchTrade } from '../api.js'
 import { formatPoints, games, teamName } from '../format.js'
 import { useApi } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
+import { PlayerLink } from './PlayerDialog.jsx'
+import TradeIdeas from './TradeIdeas.jsx'
 import { ErrorMessage, HowItWorks, Loading } from './Status.jsx'
 
 const MAX_PER_SIDE = 5
@@ -72,7 +74,9 @@ function TradeSide({ title, side, winning }) {
           <div className="comparison-name">
             <PositionChip position={p.player.position} />
             <span>
-              <strong>{p.player.name ?? `Player ${p.player.playerId}`}</strong>
+              <strong>
+                <PlayerLink player={p.player} />
+              </strong>
               <InjuryTag status={p.player.injuryStatus} />
               <span className="muted"> {p.player.team ?? 'FA'}</span>
             </span>
@@ -169,12 +173,13 @@ function TradeResult({ leagueId, giveIds, getIds }) {
   )
 }
 
-export default function TradeView({ roster }) {
+export default function TradeView({ roster, userId }) {
   const teams = useApi((signal) => fetchLeagueTeams(roster.leagueId, signal), roster.leagueId)
   const [giveIds, setGiveIds] = useState([])
   const [getIds, setGetIds] = useState([])
   const [partnerId, setPartnerId] = useState('')
   const [submitted, setSubmitted] = useState(null)
+  const resultRef = useRef(null)
 
   const myPlayers = [
     ...roster.starters.map((s) => s.player).filter(Boolean),
@@ -200,10 +205,22 @@ export default function TradeView({ roster }) {
     setSubmitted(null)
   }
 
+  /** Fills the builder with a suggested trade and analyzes it. */
+  function analyzeIdea(idea) {
+    const give = idea.give.map((p) => p.player.playerId)
+    const get = idea.get.map((p) => p.player.playerId)
+    setPartnerId(String(idea.partnerRosterId))
+    setGiveIds(give)
+    setGetIds(get)
+    setSubmitted({ give, get })
+    requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
   const canAnalyze = giveIds.length > 0 && getIds.length > 0
 
   return (
     <>
+      <TradeIdeas leagueId={roster.leagueId} userId={userId} onAnalyze={analyzeIdea} />
       <div className="trade-builder">
         <section className="card roster-section">
           <h3>
@@ -252,7 +269,9 @@ export default function TradeView({ roster }) {
         </button>
         {!canAnalyze && <span className="muted small">Pick at least one player on each side.</span>}
       </div>
-      {submitted && <TradeResult leagueId={roster.leagueId} giveIds={submitted.give} getIds={submitted.get} />}
+      <div ref={resultRef}>
+        {submitted && <TradeResult leagueId={roster.leagueId} giveIds={submitted.give} getIds={submitted.get} />}
+      </div>
     </>
   )
 }

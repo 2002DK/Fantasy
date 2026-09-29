@@ -1,12 +1,19 @@
 # Fantasy App
 
-Start/sit and trade analysis for [Sleeper](https://sleeper.com) fantasy football leagues. Enter a Sleeper
+Weekly decision tools for [Sleeper](https://sleeper.com) fantasy football leagues. Enter a Sleeper
 username, pick a league, and:
 
-- **Start/Sit**: tap two players to see who to start this week, blending projections, recent form and how
-  many points each opponent allows to the position.
-- **Trade analyzer**: pick players to give and get to see who wins, by rest-of-season value above a
-  replacement-level player, so positional scarcity counts.
+- **Lineup**: the lineup with the most expected points this week, with the swaps that get you there (benching
+  players who are out or on bye), plus **Start/Sit** for comparing any two players.
+- **Matchup**: this week's projected score against your opponent, live during games, with your win
+  probability now and with your best lineup.
+- **Trade**: analyze any trade by rest-of-season value above a replacement-level player (so positional
+  scarcity counts), or let the **trade finder** suggest deals that improve both teams' lineups.
+- **League**: standings, power rankings by projected lineup strength, and playoff odds from 10,000
+  simulations of the remaining schedule.
+- **Planner**: your roster week by week through the playoffs, flagging byes, injuries and weeks you can't fill
+  a starting slot.
+- **Player details**: any player's game log and upcoming schedule with matchup difficulty.
 
 Every number uses the league's own scoring settings (PPR or half, 6-point passing TDs, bonuses). No login:
 the app only reads public Sleeper data.
@@ -66,6 +73,15 @@ plan sleeps after 15 minutes without traffic; the first request afterwards takes
 - **Trade** value = rest-of-season points (70% summed weekly projections, 30% recent form carried forward
   and adjusted for schedule) minus a replacement-level player at the same position, derived from the
   league's team count and starting slots.
+- **Lineup** fills dedicated slots before flex slots with the best available player, then improves the result
+  where overlapping flex slots matter. Players whose games have started stay locked.
+- **Win probability** treats each player's score as normal with a standard deviation of half their expected
+  points; players whose games are final count their actual points.
+- **Playoff odds** simulate each remaining regular-season week with Sleeper's real pairings (and the league
+  median game when played), drawing each team's score around its best projected lineup. Standings sort by
+  wins, then points for.
+- **Trade ideas** try every one-for-one, two-for-one and one-for-two deal and keep those that raise both
+  teams' expected lineups while giving the partner at least 70% of the trade value they send.
 
 Weekly stats, projections and the schedule come from Sleeper's undocumented `api.sleeper.com` host. They
 are cached, and if a source is unavailable the analysis uses the rest and says so.
