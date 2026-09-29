@@ -1,18 +1,13 @@
 import { fetchStartSit } from '../api.js'
+import { formatPoints, games, ordinal } from '../format.js'
 import { useApi } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
-import { ErrorMessage, Loading } from './Status.jsx'
+import { ErrorMessage, HowItWorks, Loading } from './Status.jsx'
 
 const CONFIDENCE_LABELS = {
   CLEAR: 'Clear call',
   LEAN: 'Lean',
   TOSS_UP: 'Toss-up',
-}
-
-function ordinal(n) {
-  const mod100 = n % 100
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`
-  return n + ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th')
 }
 
 /**
@@ -29,11 +24,6 @@ function matchupLabel(matchup) {
   else if (rank <= Math.floor((teams + 1) / 2)) standing = `${ordinal(rank)} easiest`
   else standing = `${ordinal(teams - rank + 1)} toughest`
   return `${where} ${matchup.opponent} · ${standing}`
-}
-
-/** Rounds half up like the backend (toFixed alone turns 7.85 into "7.8"). */
-function formatPoints(points) {
-  return points == null ? '–' : (Math.round(points * 10) / 10).toFixed(1)
 }
 
 function PlayerColumn({ analysis, recommended }) {
@@ -59,7 +49,7 @@ function PlayerColumn({ analysis, recommended }) {
           <dt>
             Recent avg
             {recentGames.length > 0 && (
-              <span className="muted"> ({recentGames.length === 1 ? '1 game' : `${recentGames.length} games`})</span>
+              <span className="muted"> ({games(recentGames.length)})</span>
             )}
           </dt>
           <dd title={recentGames.map((g) => `Wk ${g.week} vs ${g.opponent}: ${g.points}`).join('\n')}>
@@ -92,7 +82,7 @@ export default function StartSitPanel({ leagueId, playerIds, onClear }) {
   )
 
   if (comparison.loading) return <Loading label="Comparing players…" />
-  if (comparison.error) return <ErrorMessage error={comparison.error} action={clearButton} />
+  if (comparison.error) return <ErrorMessage error={comparison.error} onRetry={comparison.retry} action={clearButton} />
   if (!comparison.data) return null
 
   const { week, recommendation, players, reasons, notes } = comparison.data
@@ -136,6 +126,24 @@ export default function StartSitPanel({ leagueId, playerIds, onClear }) {
           ))}
         </ul>
       )}
+      <HowItWorks>
+        <p>Each player's score blends:</p>
+        <ul>
+          <li>
+            <strong>60% projected points</strong> for this week, from Sleeper's projections, scored with your league's
+            settings.
+          </li>
+          <li>
+            <strong>40% recent form</strong>: the average of their last 3 games, raised or lowered by up to 15% for how
+            many points this week's opponent allows to their position. Projections already account for the opponent,
+            so the matchup only adjusts form.
+          </li>
+        </ul>
+        <p>
+          Players who are Out, on IR or on bye can't start. Questionable players lose 10% and Doubtful players 50%.
+          Scores within 5% are a toss-up and within 15% a lean.
+        </p>
+      </HowItWorks>
     </section>
   )
 }

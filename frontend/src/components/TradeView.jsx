@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { fetchLeagueTeams, fetchTrade } from '../api.js'
+import { formatPoints, games, teamName } from '../format.js'
 import { useApi } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
-import { ErrorMessage, Loading } from './Status.jsx'
+import { ErrorMessage, HowItWorks, Loading } from './Status.jsx'
 
 const MAX_PER_SIDE = 5
 
@@ -10,14 +11,6 @@ const STRENGTH_LABELS = {
   FAIR: 'Fair trade',
   SLIGHT: 'Slight edge',
   CLEAR: 'Clear edge',
-}
-
-function teamName(team) {
-  return team.owner.teamName ?? team.owner.displayName ?? `Team ${team.rosterId}`
-}
-
-function formatPoints(points) {
-  return points == null ? '–' : (Math.round(points * 10) / 10).toFixed(1)
 }
 
 function toggleIn(ids, playerId) {
@@ -90,7 +83,7 @@ function TradeSide({ title, side, winning }) {
               <dt>Rest of season</dt>
               <dd>
                 {formatPoints(p.restOfSeasonPoints)}
-                <span className="muted small"> / {p.remainingGames === 1 ? '1 game' : `${p.remainingGames} games`}</span>
+                <span className="muted small"> / {games(p.remainingGames)}</span>
               </dd>
             </div>
             <div>
@@ -118,7 +111,7 @@ function TradeResult({ leagueId, giveIds, getIds }) {
     `${leagueId}|${giveIds.join(',')}|${getIds.join(',')}`,
   )
   if (trade.loading) return <Loading label="Analyzing trade… the first run loads the season's projections." />
-  if (trade.error) return <ErrorMessage error={trade.error} />
+  if (trade.error) return <ErrorMessage error={trade.error} onRetry={trade.retry} />
   if (!trade.data) return null
 
   const { verdict, give, get, reasons, notes, fromWeek, throughWeek } = trade.data
@@ -159,6 +152,19 @@ function TradeResult({ leagueId, giveIds, getIds }) {
           ))}
         </ul>
       )}
+      <HowItWorks>
+        <p>
+          <strong>Rest-of-season points</strong> blend 70% the sum of each player's weekly projections for their
+          remaining games (byes and games already played are skipped) with 30% their recent form carried forward,
+          raised or lowered by up to 15% for how many points their remaining opponents allow.
+        </p>
+        <p>
+          <strong>Value</strong> is those points minus what a replacement-level player at the same position would
+          score: the best player who wouldn't start in a league with your team count and starting slots. That's why
+          a quarterback in a one-QB league is worth less than their raw points suggest.
+        </p>
+        <p>Sides within 10% of each other are a fair trade; within 25% is a slight edge.</p>
+      </HowItWorks>
     </section>
   )
 }
@@ -210,7 +216,7 @@ export default function TradeView({ roster }) {
             You get <span className="muted count">{getIds.length}/{MAX_PER_SIDE}</span>
           </h3>
           {teams.loading && <Loading label="Loading league teams…" />}
-          {teams.error && <ErrorMessage error={teams.error} />}
+          {teams.error && <ErrorMessage error={teams.error} onRetry={teams.retry} />}
           {teams.data && (
             <>
               <label className="visually-hidden" htmlFor="trade-partner">
@@ -225,11 +231,17 @@ export default function TradeView({ roster }) {
                 <option value="">Choose a team…</option>
                 {partners.map((team) => (
                   <option key={team.rosterId} value={team.rosterId}>
-                    {teamName(team)}
+                    {teamName(team.owner, team.rosterId)}
                   </option>
                 ))}
               </select>
-              {partner && <PickList players={partner.players} selectedIds={getIds} onToggle={updateGet} />}
+              {partner ? (
+                <PickList players={partner.players} selectedIds={getIds} onToggle={updateGet} />
+              ) : (
+                <p className="muted small pick-hint">
+                  Choose the team you're trading with to see their roster, then pick the players you'd receive.
+                </p>
+              )}
             </>
           )}
         </section>

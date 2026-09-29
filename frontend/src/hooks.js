@@ -2,31 +2,43 @@ import { useCallback, useEffect, useState } from 'react'
 
 /**
  * Runs `load(signal)` whenever `key` changes and tracks its result. A null key
- * means "nothing to load". Results are tagged with the key that produced them,
- * so a slow earlier request can never overwrite a newer one.
+ * means "nothing to load". Results are tagged with the key (and attempt) that
+ * produced them, so a slow earlier request can never overwrite a newer one.
+ * `retry()` runs the same load again, e.g. after a network error.
  */
 export function useApi(load, key) {
-  const [result, setResult] = useState({ key: null, data: null, error: null })
+  const [result, setResult] = useState({ tag: null, data: null, error: null })
+  const [attempt, setAttempt] = useState(0)
+  const tag = key == null ? null : `${key}#${attempt}`
 
   useEffect(() => {
-    if (key == null) return
+    if (tag == null) return
     const controller = new AbortController()
     load(controller.signal)
-      .then((data) => setResult({ key, data, error: null }))
+      .then((data) => setResult({ tag, data, error: null }))
       .catch((error) => {
-        if (!controller.signal.aborted) setResult({ key, data: null, error })
+        if (!controller.signal.aborted) setResult({ tag, data: null, error })
       })
     return () => controller.abort()
-    // `load` is recreated every render; `key` captures everything it depends on
+    // `load` is recreated every render; `tag` captures everything it depends on
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [tag])
 
-  const current = result.key === key
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  const current = result.tag === tag
   return {
     data: current ? result.data : null,
     error: current ? result.error : null,
-    loading: key != null && !current,
+    loading: tag != null && !current,
+    retry,
   }
+}
+
+/** Sets the browser tab title, e.g. "The Megalabowl · Fantasy App". */
+export function useDocumentTitle(title) {
+  useEffect(() => {
+    document.title = title ? `${title} · Fantasy App` : 'Fantasy App'
+  }, [title])
 }
 
 function readParams() {
