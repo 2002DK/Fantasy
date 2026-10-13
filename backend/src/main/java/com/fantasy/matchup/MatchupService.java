@@ -1,6 +1,7 @@
 package com.fantasy.matchup;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -12,6 +13,8 @@ import com.fantasy.league.SeasonCalendar;
 import com.fantasy.lineup.LineupResponse;
 import com.fantasy.lineup.LineupService;
 import com.fantasy.lineup.LineupSolver;
+import com.fantasy.lockin.LockInMark;
+import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInScorer;
 import com.fantasy.matchup.MatchupResponse.Side;
 import com.fantasy.matchup.MatchupResponse.Starter;
@@ -42,15 +45,18 @@ public class MatchupService {
     private final SleeperClient sleeperClient;
     private final LineupService lineupService;
     private final LockInScorer lockInScorer;
+    private final LockInMarkRepository lockMarks;
 
     public MatchupService(LeagueData leagueData, SeasonCalendar calendar, WeeklyScorer scorer,
-            SleeperClient sleeperClient, LineupService lineupService, LockInScorer lockInScorer) {
+            SleeperClient sleeperClient, LineupService lineupService, LockInScorer lockInScorer,
+            LockInMarkRepository lockMarks) {
         this.leagueData = leagueData;
         this.calendar = calendar;
         this.scorer = scorer;
         this.sleeperClient = sleeperClient;
         this.lineupService = lineupService;
         this.lockInScorer = lockInScorer;
+        this.lockMarks = lockMarks;
     }
 
     public MatchupResponse preview(String leagueId, String userId) {
@@ -70,7 +76,12 @@ public class MatchupService {
 
         List<String> slots = LineupSolver.startingSlots(snapshot.rosterPositions());
         double[] myVariance = new double[1];
-        Side you = basketball ? basketballSide(me, mine, slots, lockInData, myVariance)
+        Map<String, LockInMark> myLocks = new HashMap<>();
+        if (basketball) {
+            lockMarks.findByLeagueIdAndUserIdAndWeek(leagueId, userId, week)
+                    .forEach(m -> myLocks.put(m.getPlayerId(), m));
+        }
+        Side you = basketball ? basketballSide(me, mine, slots, lockInData, myLocks, myVariance)
                 : side(me, mine, slots, snapshot, data, myVariance);
         if (theirs == null) {
             notes.add(0, "You don't have an opponent in week %d.".formatted(week));
@@ -78,7 +89,7 @@ public class MatchupService {
         }
         double[] theirVariance = new double[1];
         LeagueData.Team them = snapshot.team(theirs.rosterId());
-        Side opponent = basketball ? basketballSide(them, theirs, slots, lockInData, theirVariance)
+        Side opponent = basketball ? basketballSide(them, theirs, slots, lockInData, Map.of(), theirVariance)
                 : side(them, theirs, slots, snapshot, data, theirVariance);
         double winProbability = ScoreDistribution.winProbability(
                 you.projectedPoints(), myVariance[0], opponent.projectedPoints(), theirVariance[0]);
@@ -94,9 +105,9 @@ public class MatchupService {
         }
 
         if (basketball) {
-            notes.add("Each starter counts one game: a score they can still lock, or the Lock-In value of "
-                    + "their remaining games. The app can't see which scores you've locked yet, so a starter's "
-                    + "latest score is treated as one you could still lock.");
+            notes.add("Each starter counts one game: a locked score, a score they can still lock, or the "
+                    + "Lock-In value of their remaining games. Scores you mark as locked in the Lock-In tab are "
+                    + "final here; your opponent's locks aren't visible, so their latest scores count as lockable.");
         }
         if (snapshot.league().settings() != null && snapshot.league().settings().playsMedian()) {
             notes.add("This league also plays the weekly league median, which isn't included in this win probability.");
@@ -153,10 +164,11 @@ public class MatchupService {
      * Basketball: a starter with no games left counts their score as final. Otherwise
      * they count the better of their current score (which they can lock before their
      * next game) and the Lock-In value of the games left; the spread narrows when the
-     * current score is worth keeping. Writes the side's variance into {@code variance[0]}.
+     * current score is worth keeping. A score marked as locked is final. Writes the side's
+     * variance into {@code variance[0]}.
      */
     private Side basketballSide(LeagueData.Team team, SleeperMatchup matchup, List<String> slots,
-            LockInScorer.Week data, double[] variance) {
+            LockInScorer.Week data, Map<String, LockInMark> locks, double[] variance) {
         List<String> starterIds = matchup != null && matchup.starters() != null ? matchup.starters()
                 : team.roster().starters() != null ? team.roster().starters() : List.of();
         Map<String, Double> livePoints = matchup != null && matchup.playersPoints() != null ? matchup.playersPoints()
@@ -178,7 +190,11 @@ public class MatchupService {
             int gamesLeft = analysis.games().size();
             double projected;
             String status;
-            if (gamesLeft == 0) {
+            LockInMark lock = locks.get(id);
+            if (lock != null) {
+                projected = lock.getPoints();
+                status = "locked";
+            } else if (gamesLeft == 0) {
                 projected = actual;
                 status = actual == 0 && data.gamesOf(player).isEmpty() ? "bye" : "final";
             } else {

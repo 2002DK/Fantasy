@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.RosterResponse;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInModel;
 import com.fantasy.lockin.LockInScorer;
 import com.fantasy.player.PlayerSummary;
@@ -68,7 +69,8 @@ class LineupServiceTest {
                     List.of(), null, scores.get(player.playerId()));
         });
 
-        LineupResponse response = new LineupService(leagueData, calendar, scorer, null, null).optimize("L1", "me");
+        LineupResponse response = new LineupService(leagueData, calendar, scorer, null, null, null)
+                .optimize("L1", "me");
 
         assertThat(response.slots()).extracting(s -> s.optimal().player().playerId()).containsExactly("rb", "wr");
         assertThat(response.currentTotal()).isEqualTo(6.0);
@@ -83,6 +85,8 @@ class LineupServiceTest {
     private LockInScorer lockInScorer;
     @Mock
     private SleeperClient sleeperClient;
+    @Mock
+    private LockInMarkRepository lockMarks;
 
     /**
      * PG, G and UTIL slots. Luka (PG/SG) has 50 points this week and two games left,
@@ -116,8 +120,8 @@ class LineupServiceTest {
                     new LockInModel.Outcome(value, 0, List.of(value, 0.0)));
         });
 
-        LineupResponse response = new LineupService(leagueData, calendar, null, lockInScorer, sleeperClient)
-                .optimize("L2", "me");
+        LineupResponse response = new LineupService(leagueData, calendar, null, lockInScorer, sleeperClient,
+                lockMarks).optimize("L2", "me");
 
         assertThat(response.slots()).extracting(s -> s.optimal().player().playerId())
                 .containsExactly("luka", "sg", "big");

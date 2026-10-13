@@ -16,6 +16,8 @@ import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
 import com.fantasy.lineup.LineupResponse.LineupPlayer;
 import com.fantasy.lineup.LineupSolver.Candidate;
+import com.fantasy.lockin.LockInMark;
+import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInScorer;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
@@ -39,14 +41,16 @@ public class LineupService {
     private final WeeklyScorer scorer;
     private final LockInScorer lockInScorer;
     private final SleeperClient sleeperClient;
+    private final LockInMarkRepository lockMarks;
 
     public LineupService(LeagueData leagueData, SeasonCalendar calendar, WeeklyScorer scorer,
-            LockInScorer lockInScorer, SleeperClient sleeperClient) {
+            LockInScorer lockInScorer, SleeperClient sleeperClient, LockInMarkRepository lockMarks) {
         this.leagueData = leagueData;
         this.calendar = calendar;
         this.scorer = scorer;
         this.lockInScorer = lockInScorer;
         this.sleeperClient = sleeperClient;
+        this.lockMarks = lockMarks;
     }
 
     public LineupResponse optimize(String leagueId, String userId) {
@@ -54,7 +58,7 @@ public class LineupService {
         LeagueData.Team team = snapshot.teamOf(userId);
         int week = calendar.currentWeek(snapshot.league());
         if (snapshot.league().sportType() == Sport.NBA) {
-            return optimizeBasketball(snapshot, team, week);
+            return optimizeBasketball(snapshot, team, userId, week);
         }
         WeeklyScorer.Week data = scorer.load(snapshot.league(), week);
 
@@ -105,12 +109,17 @@ public class LineupService {
      * Each player is worth their Lock-In value for the games left this week. A starter
      * who already has a score this week is worth the better of keeping it and waiting
      * (they can lock it before their next game), and stays in place: benching them could
-     * lose that score. Players in a game right now can't move.
+     * lose that score. Players in a game right now can't move. A score the user marked
+     * as locked is final.
      */
-    private LineupResponse optimizeBasketball(LeagueData.Snapshot snapshot, LeagueData.Team team, int week) {
+    private LineupResponse optimizeBasketball(LeagueData.Snapshot snapshot, LeagueData.Team team, String userId,
+            int week) {
         LockInScorer.Week data = lockInScorer.load(snapshot.league(), week);
         SleeperRoster roster = team.roster();
         Map<String, Double> counted = countedPoints(snapshot.league().leagueId(), week, team.rosterId());
+        Map<String, LockInMark> marked = new HashMap<>();
+        lockMarks.findByLeagueIdAndUserIdAndWeek(snapshot.league().leagueId(), userId, week)
+                .forEach(m -> marked.put(m.getPlayerId(), m));
         Set<String> starterIds = new HashSet<>(orEmpty(roster.starters()));
         Set<String> unavailableForLineup = new HashSet<>();
         unavailableForLineup.addAll(orEmpty(roster.reserve()));
@@ -126,14 +135,17 @@ public class LineupService {
             double score = counted.getOrDefault(player.playerId(), 0.0);
             boolean starter = starterIds.contains(player.playerId());
             boolean hasScore = starter && score > 0 && data.gamesPlayed(player) > 0;
-            double value = hasScore ? Math.max(score, analysis.value()) : analysis.value();
-            boolean locked = hasScore || data.isPlaying(player);
-            anyScored |= hasScore;
+            LockInMark mark = starter ? marked.get(player.playerId()) : null;
+            double value = mark != null ? mark.getPoints()
+                    : hasScore ? Math.max(score, analysis.value()) : analysis.value();
+            boolean locked = mark != null || hasScore || data.isPlaying(player);
+            String label = mark != null ? "Locked in at " + fmt(mark.getPoints())
+                    : gamesLabel(analysis.games().size(), hasScore ? score : null);
+            anyScored |= hasScore || mark != null;
             anyPlaying |= data.isPlaying(player);
             benchPlayed |= !starter && data.gamesPlayed(player) > 0;
             LineupPlayer lineupPlayer = new LineupPlayer(player, ScoringCalculator.round(value),
-                    analysis.available() || hasScore, analysis.availabilityNote(),
-                    gamesLabel(analysis.games().size(), hasScore ? score : null), locked);
+                    analysis.available() || hasScore || mark != null, analysis.availabilityNote(), label, locked);
             byId.put(player.playerId(), lineupPlayer);
             if (!unavailableForLineup.contains(player.playerId())) {
                 candidates.add(new Candidate(player, lineupPlayer.expectedPoints(), locked));
@@ -159,7 +171,8 @@ public class LineupService {
         notes.add("Points are Lock-In values: what each player's week is expected to count with the best "
                 + "lock-or-pass choices over their remaining games.");
         if (anyScored) {
-            notes.add("Starters who already have a score this week stay in place, since they can still lock it.");
+            notes.add("Starters who already have a score this week stay in place: a locked score is final, and "
+                    + "an unlocked one can still be locked.");
         }
         if (benchPlayed) {
             notes.add("Games played on your bench can't be locked, so bench players count only their remaining games.");

@@ -740,7 +740,61 @@ select {
 .pos-G { background: #364fc7; }
 .pos-F { background: #5c636a; }
 
-/* Basketball: Lock-In game list in the start/sit comparison */
+/* Basketball: lock-or-pass advice */
+
+.lock-advice-list {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lock-advice {
+  margin: 0;
+}
+
+.lock-advice.action-LOCK {
+  border-color: var(--success);
+}
+
+.lock-advice-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lock-advice-header .player-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.lock-advice-message {
+  margin: 8px 0 0;
+}
+
+.lock-advice button {
+  margin-top: 10px;
+}
+
+.tag.action-LOCK {
+  color: var(--success);
+  border-color: currentColor;
+}
+
+.tag.action-PASS,
+.tag.action-PLAYING {
+  color: var(--accent);
+  border-color: currentColor;
+}
+
+.tag.action-LOCKED {
+  color: var(--text);
+  border-color: currentColor;
+}
+
+/* Basketball: Lock-In game list in the start/sit comparison and lock advice */
 
 .lock-in-games {
   margin: 8px 0 0;

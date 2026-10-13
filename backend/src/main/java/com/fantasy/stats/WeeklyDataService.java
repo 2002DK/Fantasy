@@ -38,13 +38,17 @@ public class WeeklyDataService {
     private final TtlCache<SeasonWeek, List<SleeperWeeklyEntry>> projections;
     /** Stats for completed weeks rarely change after stat corrections early in the next week. */
     private final TtlCache<SeasonWeek, List<SleeperWeeklyEntry>> stats;
+    /** This week's games as they finish; kept briefly so lock-or-pass advice follows the games. */
+    private final TtlCache<SeasonWeek, List<SleeperWeeklyEntry>> liveStats;
+    /** Short-lived: game statuses (pre_game, in_game, complete) drive locks and remaining games. */
     private final TtlCache<SportSeason, List<SleeperGame>> schedules;
 
     public WeeklyDataService(SleeperStatsClient statsClient, Clock clock) {
         this.statsClient = statsClient;
         this.projections = new TtlCache<>(Duration.ofHours(1), clock);
         this.stats = new TtlCache<>(Duration.ofHours(6), clock);
-        this.schedules = new TtlCache<>(Duration.ofHours(6), clock);
+        this.liveStats = new TtlCache<>(Duration.ofMinutes(5), clock);
+        this.schedules = new TtlCache<>(Duration.ofMinutes(10), clock);
     }
 
     /**
@@ -90,6 +94,12 @@ public class WeeklyDataService {
 
     public List<SleeperWeeklyEntry> stats(Sport sport, String season, int week) {
         return stats.get(new SeasonWeek(sport, season, week), () -> statsClient.getStats(sport, season, week));
+    }
+
+    /** Stats for the week in progress, refreshed every few minutes; only games already played are kept. */
+    public List<SleeperWeeklyEntry> liveStats(Sport sport, String season, int week) {
+        return liveStats.get(new SeasonWeek(sport, season, week), () -> statsClient.getStats(sport, season, week)
+                .stream().filter(SleeperWeeklyEntry::played).toList());
     }
 
     public List<SleeperGame> schedule(Sport sport, String season) {

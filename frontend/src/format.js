@@ -22,3 +22,10 @@ export function games(count) {
 export function teamName(owner, rosterId) {
   return owner.teamName ?? owner.displayName ?? `Team ${rosterId}`
 }
+
+const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'UTC' })
+
+/** "Tue" for a game date like 2026-11-03 (the date Sleeper lists, so no time zone shift). */
+export function weekday(date) {
+  return date ? WEEKDAY.format(new Date(`${date}T00:00:00Z`)) : ''
+}

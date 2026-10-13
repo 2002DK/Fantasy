@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,8 @@ import com.fantasy.league.RosterResponse;
 import com.fantasy.league.SeasonCalendar;
 import com.fantasy.lineup.LineupResponse;
 import com.fantasy.lineup.LineupService;
+import com.fantasy.lockin.LockInMark;
+import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInModel;
 import com.fantasy.lockin.LockInScorer;
 import com.fantasy.player.PlayerSummary;
@@ -81,8 +84,8 @@ class MatchupServiceTest {
         given(lineupService.optimize("L1", "me")).willReturn(
                 new LineupResponse(5, List.of(), 30, 34, 4, List.of(), List.of()));
 
-        MatchupResponse response = new MatchupService(leagueData, calendar, scorer, sleeperClient, lineupService, null)
-                .preview("L1", "me");
+        MatchupResponse response = new MatchupService(leagueData, calendar, scorer, sleeperClient, lineupService,
+                null, null).preview("L1", "me");
 
         assertThat(response.you().actualPoints()).isEqualTo(25.0);
         assertThat(response.you().projectedPoints()).isEqualTo(35.0);
@@ -98,6 +101,8 @@ class MatchupServiceTest {
 
     @Mock
     private LockInScorer lockInScorer;
+    @Mock
+    private LockInMarkRepository lockMarks;
 
     /**
      * PG and C slots under Lock-In. Your PG scored 50 with games left worth 40, so the
@@ -106,6 +111,35 @@ class MatchupServiceTest {
      */
     @Test
     void basketballCountsOneGamePerStarter() {
+        MatchupResponse response = basketballPreview();
+
+        assertThat(response.you().projectedPoints()).isEqualTo(80.0);
+        assertThat(response.you().starters()).extracting(MatchupResponse.Starter::status)
+                .containsExactly("upcoming", "final");
+        assertThat(response.you().starters()).extracting(MatchupResponse.Starter::gamesLeft).containsExactly(2, 0);
+        assertThat(response.you().starters().getFirst().opponent()).isEqualTo("@ LAL");
+        assertThat(response.opponent().projectedPoints()).isEqualTo(75.0);
+        // Your side is settled; theirs keeps the spread of both open slots
+        double expected = 100 * ScoreDistribution.winProbability(80, 0, 75, 100 + 64);
+        assertThat(response.winProbability()).isCloseTo(expected, within(0.01));
+        assertThat(response.optimizedPoints()).isNull();
+        assertThat(response.notes()).anyMatch(n -> n.startsWith("Each starter counts one game"));
+    }
+
+    @Test
+    void basketballMarkedLockIsFinal() {
+        // You locked your PG's earlier 44, so his later 50 doesn't count
+        given(lockMarks.findByLeagueIdAndUserIdAndWeek("L2", "me", 3)).willReturn(List.of(
+                new LockInMark("L2", "me", 3, "a", "g0", "2026-11-02", "LAL", 44, Instant.EPOCH)));
+
+        MatchupResponse response = basketballPreview();
+
+        assertThat(response.you().projectedPoints()).isEqualTo(74.0);
+        assertThat(response.you().starters().getFirst().status()).isEqualTo("locked");
+        assertThat(response.you().starters().getFirst().expectedPoints()).isEqualTo(44.0);
+    }
+
+    private MatchupResponse basketballPreview() {
         SleeperLeague league = new SleeperLeague("L2", "Hoops", "2026", "in_season", 2, null,
                 List.of("PG", "C", "BN"), Map.of(), null, "nba");
         LeagueData.Team me = team(1, "me", p("a", "PG", "DAL"), p("b", "C", "BOS"));
@@ -133,20 +167,8 @@ class MatchupServiceTest {
         given(lineupService.optimize("L2", "me")).willReturn(
                 new LineupResponse(3, List.of(), 80, 80, 0, List.of(), List.of()));
 
-        MatchupResponse response = new MatchupService(leagueData, calendar, null, sleeperClient, lineupService,
-                lockInScorer).preview("L2", "me");
-
-        assertThat(response.you().projectedPoints()).isEqualTo(80.0);
-        assertThat(response.you().starters()).extracting(MatchupResponse.Starter::status)
-                .containsExactly("upcoming", "final");
-        assertThat(response.you().starters()).extracting(MatchupResponse.Starter::gamesLeft).containsExactly(2, 0);
-        assertThat(response.you().starters().getFirst().opponent()).isEqualTo("@ LAL");
-        assertThat(response.opponent().projectedPoints()).isEqualTo(75.0);
-        // Your side is settled; theirs keeps the spread of both open slots
-        double expected = 100 * ScoreDistribution.winProbability(80, 0, 75, 100 + 64);
-        assertThat(response.winProbability()).isCloseTo(expected, within(0.01));
-        assertThat(response.optimizedPoints()).isNull();
-        assertThat(response.notes()).anyMatch(n -> n.startsWith("Each starter counts one game"));
+        return new MatchupService(leagueData, calendar, null, sleeperClient, lineupService, lockInScorer, lockMarks)
+                .preview("L2", "me");
     }
 
     private static LeagueData.Team team(int rosterId, String ownerId, PlayerSummary... players) {

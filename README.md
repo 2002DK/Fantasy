@@ -1,7 +1,7 @@
 # Fantasy App
 
-Weekly decision tools for [Sleeper](https://sleeper.com) fantasy football leagues. Enter a Sleeper
-username, pick a league, and:
+Weekly decision tools for [Sleeper](https://sleeper.com) fantasy football and basketball leagues. Enter a
+Sleeper username, pick a league, and:
 
 - **Lineup**: the lineup with the most expected points this week, with the swaps that get you there (benching
   players who are out or on bye), plus **Start/Sit** for comparing any two players.
@@ -17,6 +17,15 @@ username, pick a league, and:
 
 Every number uses the league's own scoring settings (PPR or half, 6-point passing TDs, bonuses). No login:
 the app only reads public Sleeper data.
+
+**Basketball** (points leagues in Lock-In mode, where one game per starter counts each week) has:
+
+- **Lock-In**: for each starter, whether to lock their latest score or wait for their remaining games, and
+  the score worth locking after each game. Sleeper doesn't share which scores you've locked, so you mark
+  them in the app, and marked scores count as final in the lineup and matchup.
+- **Lineup**, **Start/Sit** and **Matchup**, valued by Lock-In rather than total points.
+
+Trade, League, Planner and player details for basketball are in progress.
 
 ## Stack
 
@@ -82,6 +91,12 @@ plan sleeps after 15 minutes without traffic; the first request afterwards takes
   wins, then points for.
 - **Trade ideas** try every one-for-one, two-for-one and one-for-two deal and keep those that raise both
   teams' expected lineups while giving the partner at least 70% of the trade value they send.
+
+- **Lock-In value** (basketball) is the expected counted score under the best lock-or-pass strategy over a
+  player's games left this week: working back from the last game (which counts if nothing is locked), each
+  game is worth the better of its score and the value of waiting. Each game's expected score blends 60%
+  projection with 40% average of the last 5 games, adjusted up to ±15% for the opponent's points allowed to
+  the position (from box scores). Four 40-point games are worth about 56, not 160.
 
 Weekly stats, projections and the schedule come from Sleeper's undocumented `api.sleeper.com` host. They
 are cached, and if a source is unavailable the analysis uses the rest and says so.

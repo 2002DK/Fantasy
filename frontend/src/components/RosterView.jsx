@@ -3,6 +3,7 @@ import { formatTotal, teamName } from '../format.js'
 import { useDocumentTitle } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
 import LineupOptimizer from './LineupOptimizer.jsx'
+import LockInAdvisor from './LockInAdvisor.jsx'
 import MatchupView from './MatchupView.jsx'
 import PlannerView from './PlannerView.jsx'
 import PlayerDialogProvider from './PlayerDialog.jsx'
@@ -78,8 +79,8 @@ const TOOLS = [
   { id: 'planner', label: 'Planner' },
 ]
 
-/** Basketball has these tools so far; the rest are being adapted for Lock-In scoring. */
-const BASKETBALL_TOOLS = new Set(['lineup', 'matchup'])
+/** Basketball has these tools so far, led by the daily lock-or-pass call; the rest are on the way. */
+const BASKETBALL_TOOLS = [{ id: 'locks', label: 'Lock-In' }, ...TOOLS.filter((t) => ['lineup', 'matchup'].includes(t.id))]
 
 /** Older links used ?tool=start-sit, which is now part of the Lineup tab. */
 const TOOL_ALIASES = { 'start-sit': 'lineup' }
@@ -204,9 +205,9 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
   if (!data) return null
 
   const basketball = data.sport === 'nba'
-  const tools = basketball ? TOOLS.filter((t) => BASKETBALL_TOOLS.has(t.id)) : TOOLS
+  const tools = basketball ? BASKETBALL_TOOLS : TOOLS
   const requestedTool = TOOL_ALIASES[tool] ?? tool
-  const activeTool = tools.some((t) => t.id === requestedTool) ? requestedTool : 'lineup'
+  const activeTool = tools.some((t) => t.id === requestedTool) ? requestedTool : tools[0].id
   const { owner, record } = data
   const hasPlayers = data.starters.some((s) => s.player) || data.bench.length > 0 || data.reserve.length > 0
   const recordText = record.ties > 0 ? `${record.wins}–${record.losses}–${record.ties}` : `${record.wins}–${record.losses}`
@@ -252,6 +253,7 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
           )}
           <ToolTabs tools={tools} activeTool={activeTool} onToolChange={onToolChange} />
           <div role="tabpanel" id={`panel-${activeTool}`} aria-labelledby={`tab-${activeTool}`}>
+            {activeTool === 'locks' && <LockInAdvisor leagueId={data.leagueId} userId={userId} />}
             {activeTool === 'lineup' && (
               <>
                 <LineupOptimizer leagueId={data.leagueId} userId={userId} />

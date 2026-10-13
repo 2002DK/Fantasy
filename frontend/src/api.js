@@ -3,7 +3,11 @@
  * `detail` text is shown to the user as-is.
  */
 async function getJson(path, signal) {
-  const res = await fetch(path, { signal })
+  return requestJson(path, { signal })
+}
+
+async function requestJson(path, options) {
+  const res = await fetch(path, options)
   if (!res.ok) {
     let detail
     try {
@@ -63,6 +67,17 @@ export function fetchPlayer(leagueId, playerId, userId, signal) {
     `${leaguePath(leagueId)}/players/${encodeURIComponent(playerId)}?userId=${encodeURIComponent(userId)}`,
     signal,
   )
+}
+
+export function fetchLockIn(leagueId, userId, signal) {
+  return getJson(`${userPath(leagueId, userId)}/lock-in`, signal)
+}
+
+/** Marks a starter's latest score as locked (or unmarks it); resolves to the refreshed advice. */
+export function setLocked(leagueId, userId, playerId, locked) {
+  return requestJson(`${userPath(leagueId, userId)}/lock-in/${encodeURIComponent(playerId)}`, {
+    method: locked ? 'PUT' : 'DELETE',
+  })
 }
 
 export function fetchRoster(leagueId, userId, signal) {

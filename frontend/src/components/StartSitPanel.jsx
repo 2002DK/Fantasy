@@ -1,5 +1,5 @@
 import { fetchStartSit } from '../api.js'
-import { formatPoints, games, ordinal } from '../format.js'
+import { formatPoints, games, ordinal, weekday } from '../format.js'
 import { useApi } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
 import { PlayerLink } from './PlayerDialog.jsx'
@@ -25,13 +25,6 @@ function matchupLabel(matchup) {
   else if (rank <= Math.floor((teams + 1) / 2)) standing = `${ordinal(rank)} easiest`
   else standing = `${ordinal(teams - rank + 1)} toughest`
   return `${where} ${matchup.opponent} · ${standing}`
-}
-
-const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'UTC' })
-
-/** "Tue" for a game date like 2026-11-03 (the date Sleeper lists, so no time zone shift). */
-function weekday(date) {
-  return date ? WEEKDAY.format(new Date(`${date}T00:00:00Z`)) : ''
 }
 
 /** Basketball: each game left this week, and the score worth locking after it. */

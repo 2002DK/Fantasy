@@ -23,7 +23,8 @@ public record MatchupResponse(int week, Side you, Side opponent, Double winProba
     }
 
     /**
-     * {@code status} is "upcoming", "live" or "final" (or "bye"/"empty"). {@code gamesLeft}
+     * {@code status} is "upcoming", "live" or "final" (or "bye"/"empty"; basketball adds
+     * "locked" for a score the user marked as locked). {@code gamesLeft}
      * is set for basketball, where {@code expectedPoints} is the slot's Lock-In value.
      */
     public record Starter(String slot, PlayerSummary player, double expectedPoints, double actualPoints,

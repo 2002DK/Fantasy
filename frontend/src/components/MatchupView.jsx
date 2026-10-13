@@ -12,6 +12,7 @@ function statusLabel(starter) {
   if (starter.gamesLeft == null) return STATUS_LABELS[starter.status]
   if (starter.status === 'bye') return 'No games'
   if (starter.status === 'final') return 'Done'
+  if (starter.status === 'locked') return 'Locked'
   return `${starter.gamesLeft} left`
 }
 
