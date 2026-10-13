@@ -23,6 +23,7 @@ import org.springframework.web.client.ResourceAccessException;
 
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperPlayer;
+import com.fantasy.sleeper.Sport;
 
 @DataJpaTest
 class PlayerSyncServiceTest {
@@ -50,71 +51,94 @@ class PlayerSyncServiceTest {
     }
 
     @Test
-    void firstSyncStoresPlayersAndTimestamp() {
-        given(sleeperClient.getAllPlayers()).willReturn(Map.of(
-                "4866", player("Saquon Barkley", null, null, "RB", List.of("RB"), "PHI"),
+    void firstSyncStoresEachSportUnderItsOwnKey() {
+        // Sleeper reuses IDs across sports: "1000" is a different person in each
+        given(sleeperClient.getAllPlayers(Sport.NFL)).willReturn(Map.of(
+                "1000", player("Saquon Barkley", null, null, "RB", List.of("RB"), "PHI"),
                 "LAR", player(null, "Los Angeles", "Rams", "DEF", List.of("DEF"), "LAR")));
+        given(sleeperClient.getAllPlayers(Sport.NBA)).willReturn(Map.of(
+                "1000", player("Nikola Jokić", null, null, "C", List.of("C", "PF"), "DEN")));
 
         service.syncIfStale();
 
-        assertThat(playerRepository.findById("4866")).get()
+        assertThat(playerRepository.findById(new PlayerKey(Sport.NFL, "1000"))).get()
                 .satisfies(p -> {
                     assertThat(p.getFullName()).isEqualTo("Saquon Barkley");
                     assertThat(p.getFantasyPositions()).isEqualTo("RB");
                     assertThat(p.getTeam()).isEqualTo("PHI");
                 });
-        assertThat(playerRepository.findById("LAR")).get()
-                .extracting(Player::getFullName).isEqualTo("Los Angeles Rams");
-        assertThat(dataSyncRepository.findById(PlayerSyncService.SYNC_NAME)).get()
-                .satisfies(s -> {
-                    assertThat(s.getSyncedAt()).isEqualTo(NOW);
-                    assertThat(s.getRecordCount()).isEqualTo(2);
+        assertThat(playerRepository.findById(new PlayerKey(Sport.NBA, "1000"))).get()
+                .satisfies(p -> {
+                    assertThat(p.getFullName()).isEqualTo("Nikola Jokić");
+                    assertThat(p.getFantasyPositions()).isEqualTo("C,PF");
                 });
+        assertThat(playerRepository.findById(new PlayerKey(Sport.NFL, "LAR"))).get()
+                .extracting(Player::getFullName).isEqualTo("Los Angeles Rams");
+        assertThat(dataSyncRepository.findById(PlayerSyncService.syncName(Sport.NFL))).get()
+                .satisfies(sync -> {
+                    assertThat(sync.getSyncedAt()).isEqualTo(NOW);
+                    assertThat(sync.getRecordCount()).isEqualTo(2);
+                });
+        assertThat(dataSyncRepository.findById(PlayerSyncService.syncName(Sport.NBA))).get()
+                .extracting(DataSync::getRecordCount).isEqualTo(1);
     }
 
     @Test
-    void skipsDownloadWhileDataIsFresh() {
-        dataSyncRepository.save(new DataSync(PlayerSyncService.SYNC_NAME, NOW.minus(Duration.ofHours(23)), 1));
+    void onlyStaleSportsAreDownloaded() {
+        dataSyncRepository.save(new DataSync(PlayerSyncService.syncName(Sport.NFL), NOW.minus(Duration.ofHours(23)), 1));
+        given(sleeperClient.getAllPlayers(Sport.NBA)).willReturn(Map.of(
+                "1658", player("Nikola Jokić", null, null, "C", List.of("C"), "DEN")));
 
         service.syncIfStale();
 
-        verify(sleeperClient, never()).getAllPlayers();
+        verify(sleeperClient, never()).getAllPlayers(Sport.NFL);
+        assertThat(playerRepository.countBySport("nba")).isEqualTo(1);
     }
 
     @Test
-    void staleDataIsReplacedWholesale() {
-        givenExistingSync(NOW.minus(Duration.ofHours(25)), "old-player");
-        given(sleeperClient.getAllPlayers()).willReturn(Map.of(
+    void staleSportIsReplacedWithoutTouchingTheOther() {
+        givenExistingSync(Sport.NFL, NOW.minus(Duration.ofHours(25)), "old-player");
+        givenExistingSync(Sport.NBA, NOW.minus(Duration.ofHours(1)), "nba-player");
+        given(sleeperClient.getAllPlayers(Sport.NFL)).willReturn(Map.of(
                 "4866", player("Saquon Barkley", null, null, "RB", List.of("RB"), "PHI")));
 
         service.syncIfStale();
 
-        assertThat(playerRepository.findAll()).extracting(Player::getId).containsExactly("4866");
+        assertThat(playerIds(Sport.NFL)).containsExactly("4866");
+        assertThat(playerIds(Sport.NBA)).containsExactly("nba-player");
     }
 
     @Test
-    void failedDownloadKeepsExistingData() {
-        givenExistingSync(NOW.minus(Duration.ofDays(3)), "old-player");
-        given(sleeperClient.getAllPlayers()).willThrow(new ResourceAccessException("timeout"));
+    void failedDownloadKeepsThatSportsDataAndStillSyncsTheOther() {
+        givenExistingSync(Sport.NFL, NOW.minus(Duration.ofDays(3)), "old-player");
+        given(sleeperClient.getAllPlayers(Sport.NFL)).willThrow(new ResourceAccessException("timeout"));
+        given(sleeperClient.getAllPlayers(Sport.NBA)).willReturn(Map.of(
+                "1658", player("Nikola Jokić", null, null, "C", List.of("C"), "DEN")));
 
         service.syncIfStale();
 
-        assertThat(playerRepository.findAll()).extracting(Player::getId).containsExactly("old-player");
+        assertThat(playerIds(Sport.NFL)).containsExactly("old-player");
+        assertThat(playerIds(Sport.NBA)).containsExactly("1658");
     }
 
     @Test
     void emptyResponseDoesNotWipeData() {
-        givenExistingSync(NOW.minus(Duration.ofDays(3)), "old-player");
-        given(sleeperClient.getAllPlayers()).willReturn(Map.of());
+        givenExistingSync(Sport.NFL, NOW.minus(Duration.ofDays(3)), "old-player");
+        given(sleeperClient.getAllPlayers(Sport.NFL)).willReturn(Map.of());
+        given(sleeperClient.getAllPlayers(Sport.NBA)).willReturn(Map.of());
 
         service.syncIfStale();
 
-        assertThat(playerRepository.findAll()).extracting(Player::getId).containsExactly("old-player");
+        assertThat(playerIds(Sport.NFL)).containsExactly("old-player");
     }
 
-    private void givenExistingSync(Instant syncedAt, String playerId) {
-        playerRepository.save(Player.from(playerId, player("Old Player", null, null, "WR", List.of("WR"), null)));
-        dataSyncRepository.save(new DataSync(PlayerSyncService.SYNC_NAME, syncedAt, 1));
+    private List<String> playerIds(Sport sport) {
+        return playerRepository.findAll().stream().filter(p -> p.getSport() == sport).map(Player::getPlayerId).toList();
+    }
+
+    private void givenExistingSync(Sport sport, Instant syncedAt, String playerId) {
+        playerRepository.save(Player.from(sport, playerId, player("Old Player", null, null, "WR", List.of("WR"), null)));
+        dataSyncRepository.save(new DataSync(PlayerSyncService.syncName(sport), syncedAt, 1));
     }
 
     private static SleeperPlayer player(String fullName, String firstName, String lastName, String position,

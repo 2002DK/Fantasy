@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -29,6 +30,7 @@ import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperLeagueUser;
 import com.fantasy.sleeper.SleeperRoster;
+import com.fantasy.sleeper.Sport;
 
 @ExtendWith(MockitoExtension.class)
 class RosterServiceTest {
@@ -47,8 +49,8 @@ class RosterServiceTest {
     void setUp() {
         service = new RosterService(sleeperClient, playerService);
         // Every ID resolves to a player named "P<id>"
-        lenient().when(playerService.findSummaries(any())).thenAnswer(invocation -> {
-            Collection<String> ids = invocation.getArgument(0);
+        lenient().when(playerService.findSummaries(any(), any())).thenAnswer(invocation -> {
+            Collection<String> ids = invocation.getArgument(1);
             return ids.stream().collect(Collectors.toMap(Function.identity(), RosterServiceTest::player));
         });
     }
@@ -102,7 +104,7 @@ class RosterServiceTest {
 
         service.findRoster(LEAGUE_ID, "me");
 
-        verify(playerService).findSummaries(
+        verify(playerService).findSummaries(any(),
                 argThat(ids -> ids.size() == 2 && ids.containsAll(List.of("100", "400"))));
     }
 
@@ -133,7 +135,7 @@ class RosterServiceTest {
         doReturn(Map.of(
                 "100", new PlayerSummary("100", "Zed Back", "RB", "PHI", null),
                 "200", new PlayerSummary("200", "Al Passer", "QB", "CIN", null)))
-                .when(playerService).findSummaries(any());
+                .when(playerService).findSummaries(any(), any());
 
         List<LeagueTeam> teams = service.findAllTeams(LEAGUE_ID);
 
@@ -142,6 +144,21 @@ class RosterServiceTest {
         assertThat(teams.getFirst().players()).extracting(PlayerSummary::position).containsExactly("QB", "RB");
         assertThat(teams.get(1).owner().displayName()).isNull();
         assertThat(teams.get(1).players()).isEmpty();
+    }
+
+    @Test
+    void basketballRosterLooksUpBasketballPlayers() {
+        given(sleeperClient.getLeague(LEAGUE_ID)).willReturn(Optional.of(new SleeperLeague(LEAGUE_ID, "Hoops", "2026",
+                "in_season", 10, null, List.of("PG", "C", "UTIL", "BN"), Map.of(), null, "nba")));
+        given(sleeperClient.getRosters(LEAGUE_ID)).willReturn(List.of(
+                roster(1, "me", null, List.of("1658", "4", "9"), List.of("4", "1658", "9"), null, null)));
+        given(sleeperClient.getLeagueUsers(LEAGUE_ID)).willReturn(List.of());
+
+        RosterResponse response = service.findRoster(LEAGUE_ID, "me");
+
+        verify(playerService).findSummaries(eq(Sport.NBA), any());
+        assertThat(response.sport()).isEqualTo("nba");
+        assertThat(response.starters()).extracting(Starter::slot).containsExactly("PG", "C", "UTIL");
     }
 
     @Test

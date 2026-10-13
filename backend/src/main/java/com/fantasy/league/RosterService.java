@@ -34,18 +34,16 @@ public class RosterService {
         this.playerService = playerService;
     }
 
-    /** Finds the roster the user owns or co-owns in the league. */
     /** Every team in the league with its players sorted by position, for choosing trade targets. */
     public List<LeagueTeam> findAllTeams(String leagueId) {
-        if (sleeperClient.getLeague(leagueId).isEmpty()) {
-            throw new NotFoundException("No Sleeper league found with ID '" + leagueId + "'");
-        }
+        SleeperLeague league = sleeperClient.getLeague(leagueId)
+                .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));
         List<SleeperRoster> rosters = sleeperClient.getRosters(leagueId);
         Map<String, SleeperLeagueUser> usersById = new HashMap<>();
         sleeperClient.getLeagueUsers(leagueId).forEach(u -> usersById.put(u.userId(), u));
         Set<String> allIds = new LinkedHashSet<>();
         rosters.forEach(r -> allIds.addAll(orEmpty(r.players())));
-        Map<String, PlayerSummary> players = playerService.findSummaries(allIds);
+        Map<String, PlayerSummary> players = playerService.findSummaries(league.sportType(), allIds);
 
         return rosters.stream()
                 .map(r -> new LeagueTeam(
@@ -59,13 +57,16 @@ public class RosterService {
                 .toList();
     }
 
-    private static final List<String> POSITION_ORDER = List.of("QB", "RB", "WR", "TE", "K", "DEF");
+    /** Football then basketball positions; a league only ever uses one sport's. */
+    private static final List<String> POSITION_ORDER = List.of("QB", "RB", "WR", "TE", "K", "DEF",
+            "PG", "SG", "SF", "PF", "C");
 
     private static int positionOrder(String position) {
         int index = POSITION_ORDER.indexOf(position);
         return index >= 0 ? index : POSITION_ORDER.size();
     }
 
+    /** Finds the roster the user owns or co-owns in the league. */
     public RosterResponse findRoster(String leagueId, String userId) {
         SleeperLeague league = sleeperClient.getLeague(leagueId)
                 .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));
@@ -89,7 +90,7 @@ public class RosterService {
         allIds.addAll(reserveIds);
         allIds.addAll(taxiIds);
         allIds.remove(EMPTY_SLOT_PLAYER_ID);
-        Map<String, PlayerSummary> players = playerService.findSummaries(allIds);
+        Map<String, PlayerSummary> players = playerService.findSummaries(league.sportType(), allIds);
 
         return new RosterResponse(
                 league.leagueId(),
@@ -100,7 +101,8 @@ public class RosterService {
                 toStarters(orEmpty(league.rosterPositions()), starterIds, players),
                 benchIds.stream().map(players::get).toList(),
                 reserveIds.stream().map(players::get).toList(),
-                taxiIds.stream().map(players::get).toList());
+                taxiIds.stream().map(players::get).toList(),
+                league.sportType().code());
     }
 
     /** Pairs each non-bench slot with the starter in the same position of the starters list. */

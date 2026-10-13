@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupResponse.LineupPlayer;
 import com.fantasy.lineup.LineupSolver.Candidate;
 import com.fantasy.player.PlayerSummary;
@@ -38,6 +39,7 @@ public class LineupService {
 
     public LineupResponse optimize(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
+        SportSupport.requireFootball(snapshot.league(), "The lineup optimizer");
         LeagueData.Team team = snapshot.teamOf(userId);
         int week = calendar.currentWeek(snapshot.league());
         WeeklyScorer.Week data = scorer.load(snapshot.league(), week);

@@ -2,15 +2,18 @@ package com.fantasy.league;
 
 import org.springframework.stereotype.Component;
 
-import com.fantasy.sleeper.NflState;
+import com.fantasy.sleeper.SeasonState;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
+import com.fantasy.sleeper.Sport;
 
-/** Which NFL week it is, and where a league's regular season and playoffs end. */
+/** Which week it is in a league's sport, and where a league's regular season and playoffs end. */
 @Component
 public class SeasonCalendar {
 
     public static final int LAST_NFL_WEEK = 18;
+    /** Sleeper basketball seasons run about 25 weeks including playoffs. */
+    public static final int LAST_NBA_WEEK = 26;
     /** Sleeper's default: playoffs start in week 15, so the regular season ends in week 14. */
     public static final int DEFAULT_REGULAR_SEASON_END = 14;
     /** Last fantasy week when the league has not set its playoff start. */
@@ -23,16 +26,17 @@ public class SeasonCalendar {
     }
 
     /**
-     * The current NFL week for a league in the current season. Features that look at
-     * "this week" or "the rest of the season" only make sense then.
+     * The current week of the league's sport, for a league in that sport's current season.
+     * Features that look at "this week" or "the rest of the season" only make sense then.
      */
     public int currentWeek(SleeperLeague league) {
-        NflState state = sleeperClient.getNflState();
+        Sport sport = league.sportType();
+        SeasonState state = sleeperClient.getState(sport);
         if (!league.season().equals(state.season())) {
             throw new InvalidRequestException(
                     "This league is from the " + league.season() + " season; this only works for the current season");
         }
-        return Math.clamp(state.week(), 1, LAST_NFL_WEEK);
+        return Math.clamp(state.week(), 1, sport == Sport.NBA ? LAST_NBA_WEEK : LAST_NFL_WEEK);
     }
 
     /** The final week of the league's playoffs, or week 17 when the league has not set a playoff start. */

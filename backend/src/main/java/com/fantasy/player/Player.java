@@ -3,24 +3,30 @@ package com.fantasy.player;
 import org.springframework.data.domain.Persistable;
 
 import com.fantasy.sleeper.SleeperPlayer;
+import com.fantasy.sleeper.Sport;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
-/** Cached copy of a Sleeper player, trimmed to the fields the app uses. */
+/** Cached copy of a Sleeper player, trimmed to the fields the app uses; keyed by sport and ID. */
 @Entity
 @Table(name = "player")
-public class Player implements Persistable<String> {
+@IdClass(PlayerKey.class)
+public class Player implements Persistable<PlayerKey> {
 
+    /** Sleeper's sport code, "nfl" or "nba". */
+    @Id
+    private String sport;
     @Id
     private String id;
     private String fullName;
     private String position;
-    /** Comma-separated, e.g. "RB" or "QB,TE". Drives FLEX/SUPER_FLEX eligibility. */
+    /** Comma-separated, e.g. "RB", "QB,TE" or "PG,SG". Drives flex and multi-position slot eligibility. */
     private String fantasyPositions;
     private String team;
     private String injuryStatus;
@@ -39,8 +45,9 @@ public class Player implements Persistable<String> {
     protected Player() {
     }
 
-    static Player from(String id, SleeperPlayer p) {
+    static Player from(Sport sport, String id, SleeperPlayer p) {
         Player player = new Player();
+        player.sport = sport.code();
         player.id = id;
         player.fullName = p.displayName();
         player.position = p.position();
@@ -61,8 +68,17 @@ public class Player implements Persistable<String> {
     }
 
     @Override
-    public String getId() {
+    public PlayerKey getId() {
+        return new PlayerKey(Sport.fromCode(sport), id);
+    }
+
+    /** The Sleeper player ID, unique within the sport. */
+    public String getPlayerId() {
         return id;
+    }
+
+    public Sport getSport() {
+        return Sport.fromCode(sport);
     }
 
     @Override

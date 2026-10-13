@@ -26,11 +26,12 @@ import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.SeasonCalendar;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
-import com.fantasy.sleeper.NflState;
+import com.fantasy.sleeper.SeasonState;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.WeeklyDataService;
 import com.fantasy.trade.TradeResponse.Strength;
 import com.fantasy.trade.TradeResponse.TradePlayer;
@@ -73,7 +74,7 @@ class TradeServiceTest {
         service = new TradeService(sleeperClient, playerService, new SeasonValuer(weeklyData, playerService),
                 new SeasonCalendar(sleeperClient));
         givenLeague(List.of("RB", "BN"), new SleeperLeague.Settings(4, 2, 0));
-        lenient().when(sleeperClient.getNflState()).thenReturn(new NflState("2026", 3, "regular"));
+        lenient().when(sleeperClient.getState(Sport.NFL)).thenReturn(new SeasonState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA, CEE, DEE);
         stubPlayerService();
         lenient().when(weeklyData.schedule("2026")).thenReturn(List.of(
@@ -195,11 +196,11 @@ class TradeServiceTest {
 
     @Test
     void rejectsPastSeasonAndFinishedSeason() {
-        given(sleeperClient.getNflState()).willReturn(new NflState("2027", 1, "regular"));
+        given(sleeperClient.getState(Sport.NFL)).willReturn(new SeasonState("2027", 1, "regular"));
         assertThatThrownBy(() -> service.analyze(LEAGUE_ID, List.of("A"), List.of("B")))
                 .hasMessage("Trades can only be analyzed for the current season; this league is from 2026");
 
-        given(sleeperClient.getNflState()).willReturn(new NflState("2026", 5, "regular"));
+        given(sleeperClient.getState(Sport.NFL)).willReturn(new SeasonState("2026", 5, "regular"));
         assertThatThrownBy(() -> service.analyze(LEAGUE_ID, List.of("A"), List.of("B")))
                 .hasMessage("This league's season is over (it ended in week 4)");
     }
@@ -236,9 +237,9 @@ class TradeServiceTest {
     }
 
     private void stubPlayerService() {
-        lenient().when(playerService.findSummary(any())).thenAnswer(inv -> Optional.ofNullable(players.get(inv.getArgument(0))));
-        lenient().when(playerService.findSummaries(any())).thenAnswer(inv -> {
-            Collection<String> ids = inv.getArgument(0);
+        lenient().when(playerService.findSummary(any(), any())).thenAnswer(inv -> Optional.ofNullable(players.get(inv.getArgument(1))));
+        lenient().when(playerService.findSummaries(any(), any())).thenAnswer(inv -> {
+            Collection<String> ids = inv.getArgument(1);
             return ids.stream().filter(players::containsKey)
                     .collect(Collectors.toMap(Function.identity(), players::get));
         });

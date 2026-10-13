@@ -22,11 +22,12 @@ public class SleeperClient {
         this.restClient = builder.baseUrl(baseUrl).build();
     }
 
-    public NflState getNflState() {
+    /** The sport's current season and week. */
+    public SeasonState getState(Sport sport) {
         return restClient.get()
-                .uri("/state/nfl")
+                .uri("/state/{sport}", sport.code())
                 .retrieve()
-                .body(NflState.class);
+                .body(SeasonState.class);
     }
 
     /** Sleeper answers an unknown username with HTTP 200 and a literal {@code null} body. */
@@ -38,9 +39,9 @@ public class SleeperClient {
         return Optional.ofNullable(user);
     }
 
-    public List<SleeperLeague> getLeagues(String userId, String season) {
+    public List<SleeperLeague> getLeagues(String userId, Sport sport, String season) {
         List<SleeperLeague> leagues = restClient.get()
-                .uri("/user/{userId}/leagues/nfl/{season}", userId, season)
+                .uri("/user/{userId}/leagues/{sport}/{season}", userId, sport.code(), season)
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<SleeperLeague>>() {});
         return leagues != null ? leagues : List.of();
@@ -68,12 +69,13 @@ public class SleeperClient {
     }
 
     /**
-     * The full NFL player database (~15 MB), keyed by player ID. Sleeper asks callers
-     * to fetch this at most once a day; see {@code PlayerSyncService}.
+     * A sport's full player database (football ~15 MB, basketball ~2.5 MB), keyed by
+     * player ID. Sleeper asks callers to fetch this at most once a day; see
+     * {@code PlayerSyncService}.
      */
-    public Map<String, SleeperPlayer> getAllPlayers() {
+    public Map<String, SleeperPlayer> getAllPlayers(Sport sport) {
         Map<String, SleeperPlayer> players = restClient.get()
-                .uri("/players/nfl")
+                .uri("/players/{sport}", sport.code())
                 .retrieve()
                 .body(new ParameterizedTypeReference<Map<String, SleeperPlayer>>() {});
         return players != null ? players : Map.of();

@@ -73,35 +73,48 @@ export default function LeagueList({ leagues, onSelectLeague, onSeasonChange, on
       </div>
 
       {data.leagues.length === 0 ? (
-        <p className="status">No NFL leagues for {season}. If the new season hasn't started, try last year.</p>
+        <p className="status">No leagues for {season}. If the new season hasn't started, try last year.</p>
       ) : (
-        <>
-          <h3 className="section-title">
-            Your {season} leagues <span className="muted count">{data.leagues.length}</span>
-          </h3>
-          <ul className="league-list">
-            {data.leagues.toSorted(byStatus).map((league) => (
-              <li key={league.leagueId}>
-                <button type="button" className="card league-card" onClick={() => onSelectLeague(league.leagueId)}>
-                  {league.avatarUrl ? (
-                    <img className="avatar small" src={league.avatarUrl} alt="" />
-                  ) : (
-                    <span className="avatar small placeholder" aria-hidden="true">
-                      {league.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                  <span className="league-name">{league.name}</span>
-                  <span className="muted league-teams">{league.totalRosters} teams</span>
-                  <span className={`tag status-${league.status}`}>{STATUS_LABELS[league.status] ?? league.status}</span>
-                  <span className="chevron" aria-hidden="true">
-                    ›
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
+        SPORTS.map(({ code, label }) => {
+          const leagues = data.leagues.filter((l) => l.sport === code)
+          if (leagues.length === 0) return null
+          return (
+            <section key={code} aria-label={`${label} leagues`}>
+              <h3 className="section-title">
+                {label} <span className="muted count">{leagues.length}</span>
+              </h3>
+              <ul className="league-list">
+                {leagues.toSorted(byStatus).map((league) => (
+                  <li key={league.leagueId}>
+                    <button type="button" className="card league-card" onClick={() => onSelectLeague(league.leagueId)}>
+                      {league.avatarUrl ? (
+                        <img className="avatar small" src={league.avatarUrl} alt="" />
+                      ) : (
+                        <span className="avatar small placeholder" aria-hidden="true">
+                          {league.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="league-name">{league.name}</span>
+                      <span className="muted league-teams">{league.totalRosters} teams</span>
+                      <span className={`tag status-${league.status}`}>
+                        {STATUS_LABELS[league.status] ?? league.status}
+                      </span>
+                      <span className="chevron" aria-hidden="true">
+                        ›
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        })
       )}
     </section>
   )
 }
+
+const SPORTS = [
+  { code: 'nfl', label: 'Football' },
+  { code: 'nba', label: 'Basketball' },
+]

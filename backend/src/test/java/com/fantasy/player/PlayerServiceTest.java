@@ -10,6 +10,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
 import com.fantasy.sleeper.SleeperPlayer;
+import com.fantasy.sleeper.Sport;
 
 @DataJpaTest
 @Import(PlayerService.class)
@@ -23,11 +24,11 @@ class PlayerServiceTest {
 
     @Test
     void resolvesKnownIdsAndKeepsUnknownOnes() {
-        playerRepository.save(Player.from("4866", new SleeperPlayer(
+        playerRepository.save(Player.from(Sport.NFL, "4866", new SleeperPlayer(
                 "4866", "Saquon Barkley", "Saquon", "Barkley", "RB", List.of("RB"), "PHI",
                 "Questionable", true, 29, 8, 11)));
 
-        assertThat(playerService.findSummaries(List.of("4866", "9999")))
+        assertThat(playerService.findSummaries(Sport.NFL, List.of("4866", "9999")))
                 .containsEntry("4866", new PlayerSummary("4866", "Saquon Barkley", "RB", "PHI", "Questionable"))
                 .containsEntry("9999", new PlayerSummary("9999", null, null, null, null));
     }

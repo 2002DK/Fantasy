@@ -49,10 +49,10 @@ class SleeperClientTest {
     void getLeaguesMapsList() {
         server.expect(requestTo(BASE + "/user/123/leagues/nfl/2026"))
                 .andRespond(withSuccess("""
-                        [{"league_id":"L1","name":"Dynasty","season":"2026","status":"in_season","total_rosters":12,"avatar":null}]
+                        [{"league_id":"L1","name":"Dynasty","season":"2026","status":"in_season","total_rosters":12,"avatar":null,"sport":"nfl"}]
                         """, MediaType.APPLICATION_JSON));
 
-        assertThat(client.getLeagues("123", "2026"))
+        assertThat(client.getLeagues("123", Sport.NFL, "2026"))
                 .isEqualTo(List.of(new SleeperLeague("L1", "Dynasty", "2026", "in_season", 12, null, null, null, null)));
     }
 
@@ -114,6 +114,35 @@ class SleeperClientTest {
     }
 
     @Test
+    void basketballCallsUseTheNbaPathsAndLeaguesReportTheirSport() {
+        server.expect(requestTo(BASE + "/state/nba"))
+                .andRespond(withSuccess("""
+                        {"week":2,"season":"2026","season_type":"pre"}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE + "/user/123/leagues/nba/2026"))
+                .andRespond(withSuccess("""
+                        [{"league_id":"B1","name":"Hoops","season":"2026","sport":"nba","status":"pre_draft","total_rosters":10,
+                          "roster_positions":["PG","SG","SF","PF","C","UTIL","BN"]}]
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE + "/players/nba"))
+                .andRespond(withSuccess("""
+                        {"1658":{"player_id":"1658","full_name":"Nikola Jokić","position":"C","fantasy_positions":["C"],
+                                 "team":"DEN","injury_status":"DTD","active":true}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(client.getState(Sport.NBA).seasonType()).isEqualTo("pre");
+        SleeperLeague league = client.getLeagues("123", Sport.NBA, "2026").getFirst();
+        assertThat(league.sportType()).isEqualTo(Sport.NBA);
+        assertThat(client.getAllPlayers(Sport.NBA).get("1658").injuryStatus()).isEqualTo("DTD");
+    }
+
+    @Test
+    void leaguesWithoutASportFieldAreFootball() {
+        assertThat(Sport.fromCode(null)).isEqualTo(Sport.NFL);
+        assertThat(Sport.fromCode("NBA")).isEqualTo(Sport.NBA);
+    }
+
+    @Test
     void getMatchupsReadsPairingsAndLivePoints() {
         server.expect(requestTo(BASE + "/league/L1/matchups/4"))
                 .andRespond(withSuccess("""
@@ -157,7 +186,7 @@ class SleeperClientTest {
                                 "fantasy_positions":["DEF"],"team":"LAR","active":true}}
                         """, MediaType.APPLICATION_JSON));
 
-        Map<String, SleeperPlayer> players = client.getAllPlayers();
+        Map<String, SleeperPlayer> players = client.getAllPlayers(Sport.NFL);
 
         assertThat(players).containsOnlyKeys("4866", "LAR");
         assertThat(players.get("4866").displayName()).isEqualTo("Saquon Barkley");
@@ -180,12 +209,12 @@ class SleeperClientTest {
     }
 
     @Test
-    void getNflStateReadsCurrentSeason() {
+    void getStateReadsCurrentSeason() {
         server.expect(requestTo(BASE + "/state/nfl"))
                 .andRespond(withSuccess("""
                         {"week":3,"season":"2026","season_type":"regular","previous_season":"2025"}
                         """, MediaType.APPLICATION_JSON));
 
-        assertThat(client.getNflState()).isEqualTo(new NflState("2026", 3, "regular"));
+        assertThat(client.getState(Sport.NFL)).isEqualTo(new SeasonState("2026", 3, "regular"));
     }
 }

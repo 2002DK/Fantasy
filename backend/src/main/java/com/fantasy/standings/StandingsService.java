@@ -18,6 +18,7 @@ import org.springframework.web.client.RestClientException;
 
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupSolver;
 import com.fantasy.lineup.TeamProjector;
 import com.fantasy.player.PlayerSummary;
@@ -67,6 +68,7 @@ public class StandingsService {
 
     public StandingsResponse standings(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
+        SportSupport.requireFootball(snapshot.league(), "Standings and playoff odds");
         SleeperLeague league = snapshot.league();
         int currentWeek = calendar.currentWeek(league);
         int regularSeasonEnd = SeasonCalendar.regularSeasonEnd(league.settings());

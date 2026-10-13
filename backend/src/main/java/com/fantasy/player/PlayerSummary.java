@@ -7,7 +7,7 @@ package com.fantasy.player;
 public record PlayerSummary(String playerId, String name, String position, String team, String injuryStatus) {
 
     static PlayerSummary from(Player player) {
-        return new PlayerSummary(player.getId(), player.getFullName(), player.getPosition(), player.getTeam(),
+        return new PlayerSummary(player.getPlayerId(), player.getFullName(), player.getPosition(), player.getTeam(),
                 player.getInjuryStatus());
     }
 

@@ -16,7 +16,19 @@ public record SleeperLeague(
         @JsonProperty("roster_positions") List<String> rosterPositions,
         /** Points per unit of each stat, e.g. rec 0.5 (half PPR), pass_td 6, pass_yd 0.04. */
         @JsonProperty("scoring_settings") Map<String, Double> scoringSettings,
-        @JsonProperty("settings") Settings settings) {
+        @JsonProperty("settings") Settings settings,
+        /** "nfl" or "nba". */
+        @JsonProperty("sport") String sport) {
+
+    /** A football league; the sport field is optional in Sleeper's older data. */
+    public SleeperLeague(String leagueId, String name, String season, String status, int totalRosters, String avatar,
+            List<String> rosterPositions, Map<String, Double> scoringSettings, Settings settings) {
+        this(leagueId, name, season, status, totalRosters, avatar, rosterPositions, scoringSettings, settings, "nfl");
+    }
+
+    public Sport sportType() {
+        return Sport.fromCode(sport);
+    }
 
     /**
      * playoff_week_start and trade_deadline are 0 when the league has not set them.

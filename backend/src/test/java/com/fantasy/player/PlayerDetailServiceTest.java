@@ -24,6 +24,7 @@ import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperPlayer;
 import com.fantasy.sleeper.SleeperRoster;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.DefenseTable;
 import com.fantasy.trade.SeasonValuer;
 import com.fantasy.trade.TradeResponse.TradePlayer;
@@ -49,9 +50,9 @@ class PlayerDetailServiceTest {
         SleeperRoster roster = new SleeperRoster(2, "them", null, List.of("9509"), List.of("9509"), null, null, null);
         LeagueData.Team owner = new LeagueData.Team(roster, new RosterResponse.Owner("them", "Sam", "Bijan Fans", null),
                 List.of(BIJAN));
-        given(playerService.findPlayer("9509")).willReturn(Optional.of(Player.from("9509", new SleeperPlayer(
+        given(playerService.findPlayer(Sport.NFL, "9509")).willReturn(Optional.of(Player.from(Sport.NFL, "9509", new SleeperPlayer(
                 "9509", "Bijan Robinson", "Bijan", "Robinson", "RB", List.of("RB"), "ATL", null, true, 24, 3, 5))));
-        given(playerService.findSummary("9509")).willReturn(Optional.of(BIJAN));
+        given(playerService.findSummary(Sport.NFL, "9509")).willReturn(Optional.of(BIJAN));
         given(leagueData.load("L1")).willReturn(new LeagueData.Snapshot(league, List.of(owner)));
         given(calendar.currentWeek(league)).willReturn(5);
         given(valuer.evaluate(any(), any())).willReturn(new TradePlayer(BIJAN, 2, 40.0, 15.0, 2, null, 38, 20, 18, null));

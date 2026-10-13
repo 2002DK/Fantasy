@@ -36,7 +36,7 @@ class RosterControllerTest {
                 List.of(new RosterResponse.Starter("QB", new PlayerSummary("4881", "Lamar Jackson", "QB", "BAL", null)),
                         new RosterResponse.Starter("RB", null)),
                 List.of(new PlayerSummary("4866", "Saquon Barkley", "RB", "PHI", "Questionable")),
-                List.of(), List.of()));
+                List.of(), List.of(), "nfl"));
 
         mvc.perform(get("/api/leagues/111/users/222/roster"))
                 .andExpect(status().isOk())

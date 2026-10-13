@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.NotFoundException;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.player.PlayerDetailResponse.GamePlayed;
 import com.fantasy.player.PlayerDetailResponse.Upcoming;
 import com.fantasy.sleeper.SleeperGame;
@@ -35,11 +36,12 @@ public class PlayerDetailService {
     }
 
     public PlayerDetailResponse detail(String leagueId, String playerId, String userId) {
-        Player entity = playerService.findPlayer(playerId)
-                .orElseThrow(() -> new NotFoundException("No player found with ID '" + playerId + "'"));
-        PlayerSummary player = playerService.findSummary(playerId).orElseThrow();
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
         SleeperLeague league = snapshot.league();
+        SportSupport.requireFootball(league, "Player details");
+        Player entity = playerService.findPlayer(league.sportType(), playerId)
+                .orElseThrow(() -> new NotFoundException("No player found with ID '" + playerId + "'"));
+        PlayerSummary player = playerService.findSummary(league.sportType(), playerId).orElseThrow();
         int currentWeek = calendar.currentWeek(league);
         int lastWeek = Math.max(currentWeek, SeasonCalendar.lastFantasyWeek(league.settings()));
         SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);

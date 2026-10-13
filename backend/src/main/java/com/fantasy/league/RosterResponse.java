@@ -14,7 +14,9 @@ public record RosterResponse(
         List<Starter> starters,
         List<PlayerSummary> bench,
         List<PlayerSummary> reserve,
-        List<PlayerSummary> taxi) {
+        List<PlayerSummary> taxi,
+        /** Sleeper's sport code, "nfl" or "nba". */
+        String sport) {
 
     public record Owner(String userId, String displayName, String teamName, String avatarUrl) {
     }

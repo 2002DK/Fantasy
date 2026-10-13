@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupResponse;
 import com.fantasy.lineup.LineupService;
 import com.fantasy.lineup.LineupSolver;
@@ -50,6 +51,7 @@ public class MatchupService {
 
     public MatchupResponse preview(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
+        SportSupport.requireFootball(snapshot.league(), "The matchup preview");
         LeagueData.Team me = snapshot.teamOf(userId);
         int week = calendar.currentWeek(snapshot.league());
         List<SleeperMatchup> matchups = sleeperClient.getMatchups(leagueId, week);

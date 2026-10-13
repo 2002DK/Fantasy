@@ -33,7 +33,7 @@ class LeagueControllerTest {
         given(leagueService.findLeagues("dani", null)).willReturn(new UserLeaguesResponse(
                 new UserLeaguesResponse.User("123", "dani", "Dani", null),
                 "2026",
-                List.of(new UserLeaguesResponse.League("L1", "Dynasty", "in_season", 12, null))));
+                List.of(new UserLeaguesResponse.League("L1", "Dynasty", "nfl", "in_season", 12, null))));
 
         mvc.perform(get("/api/users/dani/leagues"))
                 .andExpect(status().isOk())

@@ -128,6 +128,69 @@ function ToolTabs({ activeTool, onToolChange }) {
   )
 }
 
+function ReadOnlySection({ title, players }) {
+  if (players.length === 0) return null
+  return (
+    <section className="card roster-section">
+      <h3>
+        {title} <span className="muted count">{players.length}</span>
+      </h3>
+      <ul className="player-list">
+        {players.map((player) => (
+          <li key={player.playerId} className="player-row">
+            <PositionChip position={player.position} />
+            <PlayerCells player={player} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/**
+ * Basketball rosters are read-only for now: the tools are being adapted to Lock-In
+ * scoring, where one game per starter counts each week.
+ */
+function BasketballRoster({ data }) {
+  return (
+    <>
+      <div className="card coming-soon" role="note">
+        <h3>Basketball tools are on the way</h3>
+        <p className="muted">
+          Lineup, Start/Sit, Matchup, Trade, League and Planner are being adapted for Lock-In scoring, where one game per
+          starter counts each week. Your roster is below in the meantime.
+        </p>
+      </div>
+      <section className="card roster-section">
+        <h3>Starters</h3>
+        <ul className="player-list">
+          {data.starters.map((starter, i) => (
+            <li key={i} className="player-row">
+              <span className="slot">{starter.slot.replace('_', ' ')}</span>
+              {starter.player ? (
+                <>
+                  <PositionChip position={starter.player.position} />
+                  <PlayerCells player={starter.player} />
+                </>
+              ) : (
+                <>
+                  <span className="pos pos-empty" aria-hidden="true">
+                    –
+                  </span>
+                  <span className="player-name muted">Empty</span>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <ReadOnlySection title="Bench" players={data.bench} />
+      <ReadOnlySection title="Injured reserve" players={data.reserve} />
+      <ReadOnlySection title="Taxi squad" players={data.taxi} />
+    </>
+  )
+}
+
 /** The roster with tappable rows: picking two players shows the start/sit comparison. */
 function StartSitTool({ data }) {
   const [selectedIds, setSelectedIds] = useState([])
@@ -236,6 +299,8 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
 
       {!hasPlayers ? (
         <p className="status">No players on this roster yet. The league may not have drafted.</p>
+      ) : data.sport === 'nba' ? (
+        <BasketballRoster data={data} />
       ) : (
         <>
           <ToolTabs activeTool={activeTool} onToolChange={onToolChange} />

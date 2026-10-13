@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupSolver;
 import com.fantasy.lineup.LineupSolver.Candidate;
 import com.fantasy.planner.PlannerResponse.Cell;
@@ -49,6 +50,7 @@ public class PlannerService {
 
     public PlannerResponse plan(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
+        SportSupport.requireFootball(snapshot.league(), "The planner");
         SleeperLeague league = snapshot.league();
         LeagueData.Team team = snapshot.teamOf(userId);
         int currentWeek = calendar.currentWeek(league);

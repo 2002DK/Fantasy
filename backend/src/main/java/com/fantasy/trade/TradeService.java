@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.NotFoundException;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
@@ -54,6 +55,7 @@ public class TradeService {
         validateSides(giveIds, getIds);
         SleeperLeague league = sleeperClient.getLeague(leagueId)
                 .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));
+        SportSupport.requireFootball(league, "The trade analyzer");
         int currentWeek;
         try {
             currentWeek = calendar.currentWeek(league);
@@ -65,8 +67,8 @@ public class TradeService {
         if (currentWeek > lastWeek) {
             throw new InvalidRequestException("This league's season is over (it ended in week " + lastWeek + ")");
         }
-        List<PlayerSummary> give = giveIds.stream().map(this::findPlayer).toList();
-        List<PlayerSummary> get = getIds.stream().map(this::findPlayer).toList();
+        List<PlayerSummary> give = giveIds.stream().map(id -> findPlayer(league, id)).toList();
+        List<PlayerSummary> get = getIds.stream().map(id -> findPlayer(league, id)).toList();
 
         SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);
         Side giveSide = side(give, season);
@@ -107,8 +109,8 @@ public class TradeService {
         return SeasonCalendar.lastFantasyWeek(settings);
     }
 
-    private PlayerSummary findPlayer(String playerId) {
-        return playerService.findSummary(playerId)
+    private PlayerSummary findPlayer(SleeperLeague league, String playerId) {
+        return playerService.findSummary(league.sportType(), playerId)
                 .orElseThrow(() -> new NotFoundException("No player found with ID '" + playerId + "'"));
     }
 

@@ -6,6 +6,8 @@ const INJURY_ABBREVIATIONS = {
   PUP: 'PUP',
   Sus: 'SUS',
   NA: 'NA',
+  DTD: 'DTD',
+  GTD: 'GTD',
 }
 
 const INJURY_NAMES = {
@@ -13,12 +15,17 @@ const INJURY_NAMES = {
   PUP: 'physically unable to perform',
   Sus: 'suspended',
   NA: 'not active',
+  DTD: 'day-to-day',
+  GTD: 'game-time decision',
 }
+
+/** Statuses that usually still mean the player plays. */
+const MINOR_STATUSES = new Set(['Questionable', 'DTD', 'GTD'])
 
 /** Shows "Q"/"O"/"IR"; screen readers hear the full status instead of the abbreviation. */
 export function InjuryTag({ status }) {
   if (!status) return null
-  const severity = status === 'Questionable' ? 'minor' : 'major'
+  const severity = MINOR_STATUSES.has(status) ? 'minor' : 'major'
   const fullName = INJURY_NAMES[status] ?? status.toLowerCase()
   return (
     <span className={`tag injury ${severity}`} title={status}>

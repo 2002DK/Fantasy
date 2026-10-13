@@ -731,6 +731,26 @@ select {
 .pos-K { background: var(--pos-K); }
 .pos-DEF { background: var(--pos-DEF); }
 
+/* Basketball positions; each passes 4.5:1 with white text */
+.pos-PG { background: #5f3dc4; }
+.pos-SG { background: #0b7285; }
+.pos-SF { background: #1f7a33; }
+.pos-PF { background: #c2410c; }
+.pos-C { background: #a61e4d; }
+.pos-G { background: #364fc7; }
+.pos-F { background: #5c636a; }
+
+.coming-soon {
+  margin-top: 16px;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.coming-soon p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
 .pos-empty {
   background: none;
   color: var(--muted);

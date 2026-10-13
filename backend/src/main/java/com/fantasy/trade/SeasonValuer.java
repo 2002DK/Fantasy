@@ -173,7 +173,7 @@ public class SeasonValuer {
         Set<String> projectedIds = new LinkedHashSet<>();
         season.projectionsByWeek().values().forEach(byPlayer -> projectedIds.addAll(byPlayer.keySet()));
         Map<String, List<Double>> rosByPosition = new HashMap<>();
-        playerService.findSummaries(projectedIds).values().forEach(p -> {
+        playerService.findSummaries(league.sportType(), projectedIds).values().forEach(p -> {
             if (p.position() != null) {
                 rosByPosition.computeIfAbsent(p.position(), k -> new ArrayList<>())
                         .add(projectedPoints(p, remainingWeeks(p, season), season));

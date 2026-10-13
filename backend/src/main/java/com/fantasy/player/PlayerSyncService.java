@@ -18,17 +18,22 @@ import org.springframework.web.client.RestClientException;
 
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperPlayer;
+import com.fantasy.sleeper.Sport;
 
 /**
- * Keeps the local player table in step with Sleeper's /players/nfl. Sleeper asks
- * that this ~15 MB response be fetched at most once a day, so the sync is checked
- * on startup and hourly but only downloads when the stored copy is older than
- * {@code app.players.max-age}.
+ * Keeps the local player table in step with Sleeper's player lists, one per sport
+ * (/players/nfl ~15 MB, /players/nba ~2.5 MB). Sleeper asks that these be fetched at
+ * most once a day, so the sync is checked on startup and hourly but only downloads a
+ * sport when its stored copy is older than {@code app.players.max-age}. Each sport
+ * syncs independently, so one failing leaves the other untouched.
  */
 @Service
 public class PlayerSyncService {
 
-    static final String SYNC_NAME = "players";
+    /** The data_sync record for a sport, e.g. "players-nba". */
+    static String syncName(Sport sport) {
+        return "players-" + sport.code();
+    }
 
     private static final Logger log = LoggerFactory.getLogger(PlayerSyncService.class);
 
@@ -67,34 +72,40 @@ public class PlayerSyncService {
         }
     }
 
-    /** Downloads players when the cache is missing or too old. Failures keep the existing data. */
+    /** Downloads each sport's players when its cache is missing or too old. Failures keep the existing data. */
     public synchronized void syncIfStale() {
-        Instant lastSync = dataSyncRepository.findById(SYNC_NAME).map(DataSync::getSyncedAt).orElse(null);
-        if (lastSync != null && lastSync.plus(maxAge).isAfter(clock.instant())) {
-            log.info("Player data is fresh (synced {}); skipping download", lastSync);
-            return;
-        }
-        try {
-            int count = sync();
-            log.info("Synced {} players from Sleeper", count);
-        } catch (RestClientException e) {
-            log.warn("Player sync failed; keeping existing player data", e);
+        for (Sport sport : Sport.values()) {
+            syncIfStale(sport);
         }
     }
 
-    /** Replaces every stored player with Sleeper's current list in a single transaction. */
-    int sync() {
-        Map<String, SleeperPlayer> sleeperPlayers = sleeperClient.getAllPlayers();
+    void syncIfStale(Sport sport) {
+        Instant lastSync = dataSyncRepository.findById(syncName(sport)).map(DataSync::getSyncedAt).orElse(null);
+        if (lastSync != null && lastSync.plus(maxAge).isAfter(clock.instant())) {
+            log.info("{} player data is fresh (synced {}); skipping download", sport.displayName(), lastSync);
+            return;
+        }
+        try {
+            int count = sync(sport);
+            log.info("Synced {} {} players from Sleeper", count, sport.displayName().toLowerCase());
+        } catch (RestClientException e) {
+            log.warn("{} player sync failed; keeping existing player data", sport.displayName(), e);
+        }
+    }
+
+    /** Replaces one sport's stored players with Sleeper's current list in a single transaction. */
+    int sync(Sport sport) {
+        Map<String, SleeperPlayer> sleeperPlayers = sleeperClient.getAllPlayers(sport);
         if (sleeperPlayers.isEmpty()) {
             throw new RestClientException("Sleeper returned no players");
         }
         List<Player> players = sleeperPlayers.entrySet().stream()
-                .map(e -> Player.from(e.getKey(), e.getValue()))
+                .map(e -> Player.from(sport, e.getKey(), e.getValue()))
                 .toList();
         transactionTemplate.executeWithoutResult(status -> {
-            playerRepository.deleteAllInBatch();
+            playerRepository.deleteBySport(sport.code());
             playerRepository.saveAll(players);
-            dataSyncRepository.save(new DataSync(SYNC_NAME, clock.instant(), players.size()));
+            dataSyncRepository.save(new DataSync(syncName(sport), clock.instant(), players.size()));
         });
         return players.size();
     }

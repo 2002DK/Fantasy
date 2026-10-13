@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.NotFoundException;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
@@ -49,9 +50,10 @@ public class StartSitService {
         }
         SleeperLeague league = sleeperClient.getLeague(leagueId)
                 .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));
+        SportSupport.requireFootball(league, "Start/Sit");
         int week = requestedWeek != null ? requestedWeek : currentWeekOrAsk(league);
-        PlayerSummary playerA = findPlayer(playerAId);
-        PlayerSummary playerB = findPlayer(playerBId);
+        PlayerSummary playerA = findPlayer(league, playerAId);
+        PlayerSummary playerB = findPlayer(league, playerBId);
 
         WeeklyScorer.Week data = scorer.load(league, week);
         List<String> notes = new ArrayList<>(data.notes());
@@ -78,8 +80,8 @@ public class StartSitService {
         }
     }
 
-    private PlayerSummary findPlayer(String playerId) {
-        return playerService.findSummary(playerId)
+    private PlayerSummary findPlayer(SleeperLeague league, String playerId) {
+        return playerService.findSummary(league.sportType(), playerId)
                 .orElseThrow(() -> new NotFoundException("No player found with ID '" + playerId + "'"));
     }
 

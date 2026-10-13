@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupSolver;
 import com.fantasy.lineup.LineupSolver.Candidate;
 import com.fantasy.player.PlayerSummary;
@@ -64,6 +65,7 @@ public class TradeFinderService {
 
     public TradeIdeasResponse findIdeas(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
+        SportSupport.requireFootball(snapshot.league(), "The trade finder");
         SleeperLeague league = snapshot.league();
         LeagueData.Team me = snapshot.teamOf(userId);
         int currentWeek = calendar.currentWeek(league);

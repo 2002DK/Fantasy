@@ -82,7 +82,7 @@ public class LeagueData {
 
         Set<String> playerIds = new LinkedHashSet<>();
         rosters.forEach(r -> playerIds.addAll(orEmpty(r.players())));
-        Map<String, PlayerSummary> players = playerService.findSummaries(playerIds);
+        Map<String, PlayerSummary> players = playerService.findSummaries(league.sportType(), playerIds);
 
         List<Team> teams = rosters.stream()
                 .map(r -> new Team(r, owner(r.ownerId(), r.ownerId() != null ? users.get(r.ownerId()) : null),

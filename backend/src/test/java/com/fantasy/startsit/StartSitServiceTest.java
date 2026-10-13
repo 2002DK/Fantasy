@@ -20,11 +20,12 @@ import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.SeasonCalendar;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
-import com.fantasy.sleeper.NflState;
+import com.fantasy.sleeper.SeasonState;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.WeeklyDataService;
 import com.fantasy.startsit.StartSitResponse.Confidence;
 import com.fantasy.startsit.StartSitResponse.Matchup;
@@ -62,7 +63,7 @@ class StartSitServiceTest {
                 new SeasonCalendar(sleeperClient));
         lenient().when(sleeperClient.getLeague(LEAGUE_ID)).thenReturn(Optional.of(new SleeperLeague(
                 LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, List.of(), Map.of("rush_yd", 0.1), null)));
-        lenient().when(sleeperClient.getNflState()).thenReturn(new NflState("2026", 3, "regular"));
+        lenient().when(sleeperClient.getState(Sport.NFL)).thenReturn(new SeasonState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA);
         lenient().when(weeklyData.schedule("2026")).thenReturn(List.of(
                 new SleeperGame("g1", 3, "PHI", "NYJ", "pre_game"),
@@ -197,7 +198,7 @@ class StartSitServiceTest {
 
     @Test
     void pastSeasonNeedsExplicitWeek() {
-        given(sleeperClient.getNflState()).willReturn(new NflState("2027", 1, "regular"));
+        given(sleeperClient.getState(Sport.NFL)).willReturn(new SeasonState("2027", 1, "regular"));
 
         assertThatThrownBy(() -> service.compare(LEAGUE_ID, "A", "B", null))
                 .isInstanceOf(InvalidRequestException.class)
@@ -223,8 +224,8 @@ class StartSitServiceTest {
     }
 
     private void givenPlayers(PlayerSummary a, PlayerSummary b) {
-        lenient().when(playerService.findSummary("A")).thenReturn(Optional.of(a));
-        lenient().when(playerService.findSummary("B")).thenReturn(Optional.of(b));
+        lenient().when(playerService.findSummary(Sport.NFL, "A")).thenReturn(Optional.of(a));
+        lenient().when(playerService.findSummary(Sport.NFL, "B")).thenReturn(Optional.of(b));
     }
 
     private static SleeperWeeklyEntry rushing(String id, String team, String opponent, int week, double yards) {
