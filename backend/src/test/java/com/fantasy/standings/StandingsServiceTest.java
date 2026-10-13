@@ -66,7 +66,7 @@ class StandingsServiceTest {
         given(sleeperClient.getMatchups("L1", 13)).willReturn(List.of(m(1, 1), m(2, 1), m(3, 2), m(4, 2)));
         given(sleeperClient.getMatchups("L1", 14)).willReturn(List.of(m(1, 1), m(3, 1), m(2, 2), m(4, 2)));
 
-        StandingsResponse response = new StandingsService(leagueData, calendar, valuer, sleeperClient,
+        StandingsResponse response = new StandingsService(leagueData, calendar, valuer, sleeperClient, null,
                 Clock.systemUTC()).standings("L1", "me");
 
         assertThat(response.regularSeasonEnd()).isEqualTo(14);

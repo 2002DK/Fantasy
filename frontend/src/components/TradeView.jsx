@@ -109,7 +109,7 @@ function TradeSide({ title, side, winning }) {
   )
 }
 
-function TradeResult({ leagueId, giveIds, getIds }) {
+function TradeResult({ leagueId, giveIds, getIds, basketball }) {
   const trade = useApi(
     (signal) => fetchTrade(leagueId, giveIds, getIds, signal),
     `${leagueId}|${giveIds.join(',')}|${getIds.join(',')}`,
@@ -157,11 +157,20 @@ function TradeResult({ leagueId, giveIds, getIds }) {
         </ul>
       )}
       <HowItWorks>
-        <p>
-          <strong>Rest-of-season points</strong> blend 70% the sum of each player's weekly projections for their
-          remaining games (byes and games already played are skipped) with 30% their recent form carried forward,
-          raised or lowered by up to 15% for how many points their remaining opponents allow.
-        </p>
+        {basketball ? (
+          <p>
+            <strong>Rest-of-season points</strong> add up each remaining week's Lock-In value: one game counts per
+            week, so a week is worth the best lock-or-pass result over its games, not their total. Each game blends
+            70% projection with 30% recent form, raised or lowered by up to 15% for how many points that opponent
+            allows.
+          </p>
+        ) : (
+          <p>
+            <strong>Rest-of-season points</strong> blend 70% the sum of each player's weekly projections for their
+            remaining games (byes and games already played are skipped) with 30% their recent form carried forward,
+            raised or lowered by up to 15% for how many points their remaining opponents allow.
+          </p>
+        )}
         <p>
           <strong>Value</strong> is those points minus what a replacement-level player at the same position would
           score: the best player who wouldn't start in a league with your team count and starting slots. That's why
@@ -270,7 +279,14 @@ export default function TradeView({ roster, userId }) {
         {!canAnalyze && <span className="muted small">Pick at least one player on each side.</span>}
       </div>
       <div ref={resultRef}>
-        {submitted && <TradeResult leagueId={roster.leagueId} giveIds={submitted.give} getIds={submitted.get} />}
+        {submitted && (
+          <TradeResult
+            leagueId={roster.leagueId}
+            giveIds={submitted.give}
+            getIds={submitted.get}
+            basketball={roster.sport === 'nba'}
+          />
+        )}
       </div>
     </>
   )

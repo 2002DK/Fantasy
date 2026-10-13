@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,6 +25,8 @@ import org.springframework.web.client.ResourceAccessException;
 
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.lockin.BasketballSeason;
+import com.fantasy.lockin.BasketballSeasonValuer;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SeasonState;
@@ -72,7 +75,7 @@ class TradeServiceTest {
     @BeforeEach
     void setUp() {
         service = new TradeService(sleeperClient, playerService, new SeasonValuer(weeklyData, playerService),
-                new SeasonCalendar(sleeperClient));
+                new SeasonCalendar(sleeperClient), null);
         givenLeague(List.of("RB", "BN"), new SleeperLeague.Settings(4, 2, 0));
         lenient().when(sleeperClient.getState(Sport.NFL)).thenReturn(new SeasonState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA, CEE, DEE);
@@ -223,6 +226,33 @@ class TradeServiceTest {
         assertThat(TradeService.verdict(side(80), side(100)).winner()).isEqualTo(Winner.YOU);
         assertThat(TradeService.verdict(side(50), side(100)).strength()).isEqualTo(Strength.CLEAR);
         assertThat(TradeService.verdict(side(0), side(0)).winner()).isNull();
+    }
+
+    @Test
+    void basketballTradesUseRestOfSeasonLockInValues() {
+        BasketballSeasonValuer basketballValuer = mock(BasketballSeasonValuer.class);
+        BasketballSeason season = mock(BasketballSeason.class);
+        PlayerSummary guard = new PlayerSummary("G", "Guard", "PG", "PHI", null);
+        PlayerSummary center = new PlayerSummary("C", "Center", "C", "BOS", null);
+        givenPlayers(guard, center);
+        given(sleeperClient.getLeague("H1")).willReturn(Optional.of(new SleeperLeague("H1", "Hoops", "2026",
+                "in_season", 10, null, List.of("PG", "C"), Map.of("pts", 1.0), null, "nba")));
+        given(sleeperClient.getState(Sport.NBA)).willReturn(new SeasonState("2026", 3, "regular"));
+        given(basketballValuer.load(any(), eq(3), eq(23))).willReturn(season);
+        given(season.notes()).willReturn(List.of());
+        given(season.evaluate(guard)).willReturn(new TradePlayer(guard, 60, 900.0, null, 0, null, 900, 700, 200, null));
+        given(season.evaluate(center)).willReturn(new TradePlayer(center, 58, 850.0, null, 0, null, 850, 600, 250,
+                null));
+        TradeService basketball = new TradeService(sleeperClient, playerService,
+                new SeasonValuer(weeklyData, playerService), new SeasonCalendar(sleeperClient), basketballValuer);
+
+        TradeResponse response = basketball.analyze("H1", List.of("G"), List.of("C"));
+
+        assertThat(response.throughWeek()).isEqualTo(23);
+        assertThat(response.verdict().winner()).isEqualTo(Winner.YOU);
+        assertThat(response.verdict().valueDifference()).isEqualTo(50.0);
+        assertThat(response.notes()).contains(
+                "Basketball values are rest-of-season Lock-In points: one counted game per week.");
     }
 
     private void givenLeague(List<String> rosterPositions, SleeperLeague.Settings settings) {

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -15,11 +16,13 @@ import org.springframework.stereotype.Service;
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
-import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupSolver;
 import com.fantasy.lineup.LineupSolver.Candidate;
+import com.fantasy.lockin.BasketballSeason;
+import com.fantasy.lockin.BasketballSeasonValuer;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperLeague;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.ScoringCalculator;
 import com.fantasy.trade.TradeIdeasResponse.Idea;
 import com.fantasy.trade.TradeResponse.TradePlayer;
@@ -29,7 +32,7 @@ import com.fantasy.trade.TradeResponse.TradePlayer;
  * manager has a reason to accept.
  *
  * <p>Each player is valued at their rest-of-season points averaged over the remaining
- * weeks (so byes and injuries count), and a team's strength is its best lineup under
+ * weeks (so byes and injuries count; basketball uses Lock-In points), and a team's strength is its best lineup under
  * those averages. Every one-for-one, two-for-one and one-for-two deal between the
  * user's tradeable players and each partner's is tried; a deal qualifies when the
  * user's lineup gains at least {@link #MIN_YOUR_GAIN} a week, the partner's at least
@@ -48,15 +51,24 @@ public class TradeFinderService {
     static final double MIN_THEIR_GAIN = 0.25;
     /** Share of the trade value they send that the partner must get back. */
     static final double MIN_VALUE_RETURN = 0.7;
+    /**
+     * Most valuable players per team considered for deals. Basketball rosters run to 25+
+     * players, and every one-for-one and two-for-one package between two full rosters
+     * would mean hundreds of thousands of lineup evaluations.
+     */
+    static final int MAX_TRADEABLE = 12;
 
     private final LeagueData leagueData;
     private final SeasonCalendar calendar;
     private final SeasonValuer valuer;
+    private final BasketballSeasonValuer basketballValuer;
 
-    public TradeFinderService(LeagueData leagueData, SeasonCalendar calendar, SeasonValuer valuer) {
+    public TradeFinderService(LeagueData leagueData, SeasonCalendar calendar, SeasonValuer valuer,
+            BasketballSeasonValuer basketballValuer) {
         this.leagueData = leagueData;
         this.calendar = calendar;
         this.valuer = valuer;
+        this.basketballValuer = basketballValuer;
     }
 
     private record Deal(LeagueData.Team partner, List<PlayerSummary> give, List<PlayerSummary> get, double yourGain,
@@ -65,16 +77,24 @@ public class TradeFinderService {
 
     public TradeIdeasResponse findIdeas(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
-        SportSupport.requireFootball(snapshot.league(), "The trade finder");
         SleeperLeague league = snapshot.league();
         LeagueData.Team me = snapshot.teamOf(userId);
         int currentWeek = calendar.currentWeek(league);
-        int lastWeek = SeasonCalendar.lastFantasyWeek(league.settings());
+        int lastWeek = SeasonCalendar.lastFantasyWeek(league);
         if (currentWeek > lastWeek) {
             throw new InvalidRequestException("This league's season is over (it ended in week " + lastWeek + ")");
         }
-        SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);
-        List<String> notes = new ArrayList<>(season.notes());
+        Function<PlayerSummary, TradePlayer> evaluate;
+        List<String> notes;
+        if (league.sportType() == Sport.NBA) {
+            BasketballSeason season = basketballValuer.load(league, currentWeek, lastWeek);
+            evaluate = season::evaluate;
+            notes = new ArrayList<>(season.notes());
+        } else {
+            SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);
+            evaluate = p -> valuer.evaluate(p, season);
+            notes = new ArrayList<>(season.notes());
+        }
         if (league.settings() != null && league.settings().tradeDeadline() > 0
                 && currentWeek > league.settings().tradeDeadline()) {
             notes.add(0, "This league's trade deadline (week %d) has passed.".formatted(league.settings().tradeDeadline()));
@@ -90,7 +110,7 @@ public class TradeFinderService {
                 if (p == null || taxi.contains(p.playerId())) {
                     continue;
                 }
-                TradePlayer value = valuer.evaluate(p, season);
+                TradePlayer value = evaluate.apply(p);
                 values.put(p.playerId(), value);
                 candidates.add(new Candidate(p, value.restOfSeasonPoints() / weeks, false));
             }
@@ -109,8 +129,9 @@ public class TradeFinderService {
             }
             List<Candidate> theirs = rosters.get(partner.rosterId());
             double theirBase = strength(slots, theirs);
+            List<List<Candidate>> theirPackages = packages(tradeable(theirs, values));
             for (List<Candidate> give : myPackages) {
-                for (List<Candidate> get : packages(tradeable(theirs, values))) {
+                for (List<Candidate> get : theirPackages) {
                     if (give.size() == 2 && get.size() == 2 || !fairForPartner(give, get, values)) {
                         continue;
                     }
@@ -145,9 +166,13 @@ public class TradeFinderService {
         return LineupSolver.total(LineupSolver.solve(slots, List.of(), roster));
     }
 
-    /** Players worth trading: value above replacement at their position. */
+    /** Players worth trading: value above replacement at their position, the most valuable first. */
     private static List<Candidate> tradeable(List<Candidate> roster, Map<String, TradePlayer> values) {
-        return roster.stream().filter(c -> values.get(c.player().playerId()).value() > 0).toList();
+        return roster.stream().filter(c -> values.get(c.player().playerId()).value() > 0)
+                .sorted(Comparator.comparingDouble((Candidate c) -> values.get(c.player().playerId()).value())
+                        .reversed())
+                .limit(MAX_TRADEABLE)
+                .toList();
     }
 
     /** Every single player and every pair. */

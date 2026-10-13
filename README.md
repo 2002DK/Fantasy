@@ -23,9 +23,8 @@ the app only reads public Sleeper data.
 - **Lock-In**: for each starter, whether to lock their latest score or wait for their remaining games, and
   the score worth locking after each game. Sleeper doesn't share which scores you've locked, so you mark
   them in the app, and marked scores count as final in the lineup and matchup.
-- **Lineup**, **Start/Sit** and **Matchup**, valued by Lock-In rather than total points.
-
-Trade, League, Planner and player details for basketball are in progress.
+- Every football tool above, valued by Lock-In rather than total points: trades and power rankings use
+  rest-of-season Lock-In value, and the planner shows games per week instead of byes.
 
 ## Stack
 

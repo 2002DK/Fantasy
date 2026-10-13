@@ -12,14 +12,17 @@ import java.util.Map;
  * above this level, which is why a QB in a one-QB league is worth less than their
  * raw points suggest.
  */
-final class ReplacementLevels {
+public final class ReplacementLevels {
 
     /** How flex slots are typically filled, as a share of each slot per position. */
     private static final Map<String, Map<String, Double>> FLEX_SHARES = Map.of(
             "FLEX", Map.of("RB", 0.45, "WR", 0.45, "TE", 0.10),
             "WRRB_FLEX", Map.of("RB", 0.5, "WR", 0.5),
             "REC_FLEX", Map.of("WR", 0.8, "TE", 0.2),
-            "SUPER_FLEX", Map.of("QB", 0.9, "RB", 0.05, "WR", 0.05));
+            "SUPER_FLEX", Map.of("QB", 0.9, "RB", 0.05, "WR", 0.05),
+            "G", Map.of("PG", 0.5, "SG", 0.5),
+            "F", Map.of("SF", 0.5, "PF", 0.5),
+            "UTIL", Map.of("PG", 0.2, "SG", 0.2, "SF", 0.2, "PF", 0.2, "C", 0.2));
 
     private final Map<String, Double> startersPerTeam;
     private final Map<String, Double> levels;
@@ -32,7 +35,7 @@ final class ReplacementLevels {
     /**
      * @param rosByPosition rest-of-season projected points of every projected player, by position
      */
-    static ReplacementLevels compute(List<String> rosterPositions, int teams, Map<String, List<Double>> rosByPosition) {
+    public static ReplacementLevels compute(List<String> rosterPositions, int teams, Map<String, List<Double>> rosByPosition) {
         Map<String, Double> starters = startersPerTeam(rosterPositions);
         Map<String, Double> levels = new HashMap<>();
         starters.forEach((position, perTeam) -> {
@@ -57,11 +60,11 @@ final class ReplacementLevels {
     }
 
     /** Whether the league has any starting slot this position can fill. */
-    boolean isStartable(String position) {
+    public boolean isStartable(String position) {
         return position != null && startersPerTeam.getOrDefault(position, 0.0) > 0;
     }
 
-    double level(String position) {
+    public double level(String position) {
         return position != null ? levels.getOrDefault(position, 0.0) : 0.0;
     }
 }

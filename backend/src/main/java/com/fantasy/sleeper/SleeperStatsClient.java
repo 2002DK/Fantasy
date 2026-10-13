@@ -55,6 +55,19 @@ public class SleeperStatsClient {
         return getWeekly("projections", sport, season, week);
     }
 
+    /**
+     * Basketball: each player's projected average game for the whole season (one row
+     * per player, with no week or opponent).
+     */
+    public List<SleeperWeeklyEntry> getSeasonProjections(Sport sport, String season) {
+        List<SleeperWeeklyEntry> entries = restClient.get()
+                .uri(uri -> uri.path("/projections/{sport}/{season}").queryParam("season_type", "regular")
+                        .build(sport.code(), season))
+                .retrieve()
+                .body(ENTRIES);
+        return entries != null ? entries : List.of();
+    }
+
     public List<SleeperWeeklyEntry> getStats(Sport sport, String season, int week) {
         return getWeekly("stats", sport, season, week);
     }

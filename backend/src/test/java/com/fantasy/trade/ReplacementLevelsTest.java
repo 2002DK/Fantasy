@@ -23,6 +23,17 @@ class ReplacementLevelsTest {
     }
 
     @Test
+    void basketballGuardForwardAndUtilitySlotsAreShared() {
+        Map<String, Double> starters = ReplacementLevels.startersPerTeam(
+                List.of("PG", "SG", "G", "SF", "PF", "F", "C", "UTIL", "UTIL", "UTIL", "BN"));
+
+        assertThat(starters.get("PG")).isCloseTo(2.1, within(1e-9)); // 1 + 0.5 G + 3 × 0.2 UTIL
+        assertThat(starters.get("SF")).isCloseTo(2.1, within(1e-9));
+        assertThat(starters.get("C")).isCloseTo(1.6, within(1e-9));
+        assertThat(starters.values().stream().mapToDouble(Double::doubleValue).sum()).isCloseTo(10, within(1e-9));
+    }
+
+    @Test
     void replacementIsBestPlayerOutsideLeagueStarters() {
         // 3 teams x 1 QB = 3 starters; the 4th best QB is replacement level
         ReplacementLevels levels = ReplacementLevels.compute(List.of("QB", "BN"), 3,

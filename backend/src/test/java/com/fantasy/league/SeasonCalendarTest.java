@@ -39,4 +39,29 @@ class SeasonCalendarTest {
 
         assertThat(new SeasonCalendar(sleeperClient).currentWeek(HOOPS)).isEqualTo(SeasonCalendar.LAST_NBA_WEEK);
     }
+
+    @Test
+    void basketballSeasonLengthFollowsItsPlayoffSettings() {
+        SleeperLeague set = new SleeperLeague("H2", "Hoops", "2026", "in_season", 10, null, List.of(), Map.of(),
+                new SleeperLeague.Settings(22, 6, 0), "nba");
+        SleeperLeague unset = new SleeperLeague("H3", "Hoops", "2026", "in_season", 10, null, List.of(), Map.of(),
+                null, "nba");
+
+        assertThat(SeasonCalendar.regularSeasonEnd(set)).isEqualTo(21);
+        assertThat(SeasonCalendar.lastFantasyWeek(set)).isEqualTo(24); // 6 teams: 3 rounds
+        assertThat(SeasonCalendar.regularSeasonEnd(unset)).isEqualTo(20);
+        assertThat(SeasonCalendar.lastFantasyWeek(unset)).isEqualTo(23);
+        // Never past the last scheduled week
+        assertThat(SeasonCalendar.lastFantasyWeek(new SleeperLeague("H4", "Hoops", "2026", "in_season", 10, null,
+                List.of(), Map.of(), new SleeperLeague.Settings(24, 8, 0), "nba"))).isEqualTo(25);
+    }
+
+    @Test
+    void footballSeasonLengthIsUnchanged() {
+        SleeperLeague football = new SleeperLeague("F1", "Gridiron", "2026", "in_season", 12, null, List.of(),
+                Map.of(), new SleeperLeague.Settings(15, 6, 0));
+
+        assertThat(SeasonCalendar.lastFantasyWeek(football)).isEqualTo(17);
+        assertThat(SeasonCalendar.regularSeasonEnd(football)).isEqualTo(14);
+    }
 }

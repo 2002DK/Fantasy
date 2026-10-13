@@ -7,7 +7,7 @@ function record(team) {
   return team.ties > 0 ? `${team.wins}–${team.losses}–${team.ties}` : `${team.wins}–${team.losses}`
 }
 
-export default function StandingsView({ leagueId, userId }) {
+export default function StandingsView({ leagueId, userId, basketball }) {
   const standings = useApi((signal) => fetchStandings(leagueId, userId, signal), `${leagueId}|${userId}`)
 
   if (standings.loading) return <Loading label="Simulating the rest of the season…" />
@@ -88,10 +88,17 @@ export default function StandingsView({ leagueId, userId }) {
         </p>
       </div>
       <HowItWorks>
-        <p>
-          <strong>Strength</strong> is each team's best possible starting lineup, averaged over the remaining weeks from
-          weekly projections in your league's scoring, so byes and injuries count.
-        </p>
+        {basketball ? (
+          <p>
+            <strong>Strength</strong> is each team's best possible starting lineup, averaged over the remaining weeks,
+            with each starter counting one game a week at its Lock-In value, so schedules and injuries count.
+          </p>
+        ) : (
+          <p>
+            <strong>Strength</strong> is each team's best possible starting lineup, averaged over the remaining weeks
+            from weekly projections in your league's scoring, so byes and injuries count.
+          </p>
+        )}
         <p>
           <strong>Playoff odds</strong> come from simulating the remaining regular season{' '}
           {simulations != null && `${simulations.toLocaleString()} times `}

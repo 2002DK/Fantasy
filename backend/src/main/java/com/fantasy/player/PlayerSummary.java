@@ -33,8 +33,14 @@ public record PlayerSummary(String playerId, String name, String position, Strin
 
     /** Whether the player may fill a slot that accepts any of these positions. */
     public boolean fitsAny(Set<String> positions) {
-        List<String> eligible = eligiblePositions != null && !eligiblePositions.isEmpty() ? eligiblePositions
-                : position != null ? List.of(position) : List.of();
-        return eligible.stream().anyMatch(positions::contains);
+        if (eligiblePositions == null || eligiblePositions.isEmpty()) {
+            return position != null && positions.contains(position);
+        }
+        for (String eligible : eligiblePositions) {
+            if (positions.contains(eligible)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

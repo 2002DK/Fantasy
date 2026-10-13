@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchPlayer } from '../api.js'
-import { formatPoints } from '../format.js'
+import { formatPoints, weekday } from '../format.js'
 import { useApi } from '../hooks.js'
 import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
 import { PlayerContext, useOpenPlayer } from './playerContext.js'
 import { ErrorMessage, Loading } from './Status.jsx'
 
-/** A player's name as a button that opens their detail dialog, or plain text where details are unavailable. */
+/** A player's name as a button that opens their detail dialog. */
 export function PlayerLink({ player, children }) {
   const openPlayer = useOpenPlayer()
   const label = player.name ?? `Player ${player.playerId}`
-  if (!openPlayer) return <span>{children ?? label}</span>
   return (
     <button type="button" className="player-link" onClick={() => openPlayer(player.playerId)}>
       {children ?? label}
@@ -32,7 +31,10 @@ function PlayerDetail({ leagueId, userId, playerId }) {
   if (detail.error) return <ErrorMessage error={detail.error} onRetry={detail.retry} />
   if (!detail.data) return null
 
-  const { player, age, yearsExp, rosteredBy, onYourTeam, value, games, upcoming } = detail.data
+  const { player, age, yearsExp, rosteredBy, onYourTeam, value, games, upcoming, lockInWeeks } = detail.data
+  // Basketball lists games by date and adds each week's Lock-In value
+  const basketball = lockInWeeks != null
+  const gameLabel = (g) => (g.date ? weekday(g.date) : `Wk ${g.week}`)
   const maxPoints = Math.max(1, ...games.map((g) => g.points), ...upcoming.map((u) => u.projected ?? 0))
 
   return (
@@ -89,10 +91,10 @@ function PlayerDetail({ leagueId, userId, playerId }) {
         <p className="muted small">No games played yet.</p>
       ) : (
         <ul className="bar-list">
-          {games.map((g) => (
-            <li key={g.week}>
+          {games.map((g, i) => (
+            <li key={`${g.week}-${i}`}>
               <span className="bar-label">
-                Wk {g.week} <span className="muted">{g.opponent}</span>
+                {gameLabel(g)} <span className="muted">{g.opponent}</span>
               </span>
               <span className="bar" style={{ width: `${(g.points / maxPoints) * 100}%` }} aria-hidden="true" />
               <span className="bar-value">{formatPoints(g.points)}</span>
@@ -103,10 +105,10 @@ function PlayerDetail({ leagueId, userId, playerId }) {
 
       <h3 className="dialog-section">Upcoming</h3>
       <ul className="bar-list upcoming">
-        {upcoming.map((u) => (
-          <li key={u.week}>
+        {upcoming.map((u, i) => (
+          <li key={`${u.week}-${i}`}>
             <span className="bar-label">
-              Wk {u.week} <span className="muted">{u.opponent ?? 'Bye'}</span>
+              {gameLabel(u)} <span className="muted">{u.opponent ?? 'Bye'}</span>
             </span>
             {u.opponent ? (
               <>
@@ -126,6 +128,30 @@ function PlayerDetail({ leagueId, userId, playerId }) {
       <p className="muted small">
         Upcoming bars are projections in your league's scoring; green marks easier matchups and red tougher ones.
       </p>
+      {basketball && lockInWeeks.length > 0 && (
+        <>
+          <h3 className="dialog-section">Weekly Lock-In value</h3>
+          <ul className="bar-list">
+            {lockInWeeks.map((w) => (
+              <li key={w.week}>
+                <span className="bar-label">
+                  Wk {w.week} <span className="muted">{w.games === 1 ? '1 game' : `${w.games} games`}</span>
+                </span>
+                <span
+                  className="bar projected"
+                  style={{ width: `${(w.value / Math.max(1, ...lockInWeeks.map((x) => x.value))) * 100}%` }}
+                  aria-hidden="true"
+                />
+                <span className="bar-value">{formatPoints(w.value)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">
+            One game counts each week, so more games add less than their points: the value of the best lock-or-pass
+            choices over that week's games.
+          </p>
+        </>
+      )}
     </>
   )
 }
@@ -133,10 +159,8 @@ function PlayerDetail({ leagueId, userId, playerId }) {
 /**
  * Provides useOpenPlayer() to its children and renders the detail dialog. Uses the native
  * <dialog> element, which traps focus, closes on Escape and restores focus on close.
- * With {@code enabled} false (basketball, until player details support it) useOpenPlayer()
- * returns null and names render as plain text.
  */
-export default function PlayerDialogProvider({ leagueId, userId, enabled = true, children }) {
+export default function PlayerDialogProvider({ leagueId, userId, children }) {
   const [playerId, setPlayerId] = useState(null)
   const dialogRef = useRef(null)
 
@@ -148,7 +172,7 @@ export default function PlayerDialogProvider({ leagueId, userId, enabled = true,
   }, [playerId])
 
   return (
-    <PlayerContext.Provider value={enabled ? setPlayerId : null}>
+    <PlayerContext.Provider value={setPlayerId}>
       {children}
       <dialog
         ref={dialogRef}

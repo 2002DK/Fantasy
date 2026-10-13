@@ -38,16 +38,14 @@ function SelectableRow({ player, selected, onToggle, children }) {
       >
         {children}
       </button>
-      {openPlayer && (
-        <button
-          type="button"
-          className="info-button"
-          aria-label={`Details for ${player.name ?? 'player'}`}
-          onClick={() => openPlayer(player.playerId)}
-        >
-          i
-        </button>
-      )}
+      <button
+        type="button"
+        className="info-button"
+        aria-label={`Details for ${player.name ?? 'player'}`}
+        onClick={() => openPlayer(player.playerId)}
+      >
+        i
+      </button>
     </li>
   )
 }
@@ -79,8 +77,8 @@ const TOOLS = [
   { id: 'planner', label: 'Planner' },
 ]
 
-/** Basketball has these tools so far, led by the daily lock-or-pass call; the rest are on the way. */
-const BASKETBALL_TOOLS = [{ id: 'locks', label: 'Lock-In' }, ...TOOLS.filter((t) => ['lineup', 'matchup'].includes(t.id))]
+/** Basketball adds the daily lock-or-pass call in front of the same tools. */
+const BASKETBALL_TOOLS = [{ id: 'locks', label: 'Lock-In' }, ...TOOLS]
 
 /** Older links used ?tool=start-sit, which is now part of the Lineup tab. */
 const TOOL_ALIASES = { 'start-sit': 'lineup' }
@@ -213,7 +211,7 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
   const recordText = record.ties > 0 ? `${record.wins}–${record.losses}–${record.ties}` : `${record.wins}–${record.losses}`
 
   return (
-    <PlayerDialogProvider leagueId={data.leagueId} userId={userId} enabled={!basketball}>
+    <PlayerDialogProvider leagueId={data.leagueId} userId={userId}>
     <section>
       {backButton}
       <div className="card team-header">
@@ -246,11 +244,6 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
         <p className="status">No players on this roster yet. The league may not have drafted.</p>
       ) : (
         <>
-          {basketball && (
-            <p className="hint muted">
-              Trade, League, Planner and player details for basketball are on the way.
-            </p>
-          )}
           <ToolTabs tools={tools} activeTool={activeTool} onToolChange={onToolChange} />
           <div role="tabpanel" id={`panel-${activeTool}`} aria-labelledby={`tab-${activeTool}`}>
             {activeTool === 'locks' && <LockInAdvisor leagueId={data.leagueId} userId={userId} />}
@@ -264,8 +257,12 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
               <MatchupView leagueId={data.leagueId} userId={userId} onOpenLineup={() => onToolChange('lineup')} />
             )}
             {activeTool === 'trade' && <TradeView roster={data} userId={userId} />}
-            {activeTool === 'league' && <StandingsView leagueId={data.leagueId} userId={userId} />}
-            {activeTool === 'planner' && <PlannerView leagueId={data.leagueId} userId={userId} />}
+            {activeTool === 'league' && (
+              <StandingsView leagueId={data.leagueId} userId={userId} basketball={basketball} />
+            )}
+            {activeTool === 'planner' && (
+              <PlannerView leagueId={data.leagueId} userId={userId} basketball={basketball} />
+            )}
           </div>
         </>
       )}

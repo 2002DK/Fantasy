@@ -13,8 +13,14 @@ public record PlannerResponse(List<Integer> weeks, List<Row> players, List<Short
     /**
      * {@code status} is "ok", "bye", "out", "doubtful", "questionable" or "played" (this
      * week's game already started). {@code opponent} reads like "vs DAL" or "@ BUF".
+     * Basketball sets {@code games} (games that week, or left this week), with
+     * {@code projected} the week's Lock-In value and "bye" meaning no games.
      */
-    public record Cell(int week, String status, Double projected, String opponent) {
+    public record Cell(int week, String status, Double projected, String opponent, Integer games) {
+
+        public Cell(int week, String status, Double projected, String opponent) {
+            this(week, status, projected, opponent, null);
+        }
     }
 
     /** A week in which the available players can't fill these starting slots. */

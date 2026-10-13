@@ -19,15 +19,37 @@ public record PlayerDetailResponse(
         TradePlayer value,
         List<GamePlayed> games,
         List<Upcoming> upcoming,
-        List<String> notes) {
+        List<String> notes,
+        /** Basketball only: each remaining week's games and Lock-In value; null for football. */
+        List<WeekValue> lockInWeeks) {
 
-    public record GamePlayed(int week, String opponent, double points) {
+    public PlayerDetailResponse(PlayerSummary player, Integer age, Integer yearsExp, String rosteredBy,
+            boolean onYourTeam, TradePlayer value, List<GamePlayed> games, List<Upcoming> upcoming,
+            List<String> notes) {
+        this(player, age, yearsExp, rosteredBy, onYourTeam, value, games, upcoming, notes, null);
+    }
+
+    /** One game (basketball, with its date) or one week's game (football). */
+    public record GamePlayed(int week, String opponent, double points, String date) {
+
+        public GamePlayed(int week, String opponent, double points) {
+            this(week, opponent, points, null);
+        }
     }
 
     /**
      * {@code opponent} reads like "vs DAL" or "@ BUF" and is null on a bye.
      * {@code matchupRank} 1 = the opponent allows the most points to the position (easiest).
+     * Basketball lists games, with their date, for this week and next.
      */
-    public record Upcoming(int week, String opponent, Double projected, Integer matchupRank, Integer teams) {
+    public record Upcoming(int week, String opponent, Double projected, Integer matchupRank, Integer teams,
+            String date) {
+
+        public Upcoming(int week, String opponent, Double projected, Integer matchupRank, Integer teams) {
+            this(week, opponent, projected, matchupRank, teams, null);
+        }
+    }
+
+    public record WeekValue(int week, int games, double value) {
     }
 }

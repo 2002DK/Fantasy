@@ -50,7 +50,7 @@ public class LockInScorer {
     static final double FORM_WEIGHT = 0.4;
     static final int FORM_GAMES = 5;
     /** Box-score weeks kept for form and matchups: about 14 games per team, and a bounded download. */
-    static final int PAST_WEEKS = 4;
+    public static final int PAST_WEEKS = 4;
     /** Below this many completed weeks, points-allowed rankings are mostly noise. */
     static final int RELIABLE_MATCHUP_WEEKS = 2;
 

@@ -18,14 +18,16 @@ import org.springframework.web.client.RestClientException;
 
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
-import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupSolver;
 import com.fantasy.lineup.TeamProjector;
+import com.fantasy.lockin.BasketballSeason;
+import com.fantasy.lockin.BasketballSeasonValuer;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperMatchup;
 import com.fantasy.sleeper.SleeperRoster;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.standings.SeasonSimulator.TeamStart;
 import com.fantasy.standings.SeasonSimulator.WeekGames;
 import com.fantasy.standings.StandingsResponse.TeamStanding;
@@ -54,25 +56,26 @@ public class StandingsService {
     private final SeasonCalendar calendar;
     private final SeasonValuer valuer;
     private final SleeperClient sleeperClient;
+    private final BasketballSeasonValuer basketballValuer;
     /** Future pairings rarely change; they are fetched once per league and week for half an hour. */
     private final TtlCache<LeagueWeek, List<SleeperMatchup>> pairings;
 
     public StandingsService(LeagueData leagueData, SeasonCalendar calendar, SeasonValuer valuer,
-            SleeperClient sleeperClient, Clock clock) {
+            SleeperClient sleeperClient, BasketballSeasonValuer basketballValuer, Clock clock) {
         this.leagueData = leagueData;
         this.calendar = calendar;
         this.valuer = valuer;
         this.sleeperClient = sleeperClient;
+        this.basketballValuer = basketballValuer;
         this.pairings = new TtlCache<>(Duration.ofMinutes(30), clock);
     }
 
     public StandingsResponse standings(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
-        SportSupport.requireFootball(snapshot.league(), "Standings and playoff odds");
         SleeperLeague league = snapshot.league();
         int currentWeek = calendar.currentWeek(league);
-        int regularSeasonEnd = SeasonCalendar.regularSeasonEnd(league.settings());
-        int lastWeek = SeasonCalendar.lastFantasyWeek(league.settings());
+        int regularSeasonEnd = SeasonCalendar.regularSeasonEnd(league);
+        int lastWeek = SeasonCalendar.lastFantasyWeek(league);
         int playoffTeams = league.settings() != null && league.settings().playoffTeams() > 0
                 ? league.settings().playoffTeams() : DEFAULT_PLAYOFF_TEAMS;
 
@@ -81,9 +84,11 @@ public class StandingsService {
         SeasonSimulator.Result odds = null;
 
         if (currentWeek <= lastWeek) {
-            SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);
-            notes.addAll(season.notes());
-            if (season.projectionsAvailable()) {
+            boolean basketball = league.sportType() == Sport.NBA;
+            SeasonValuer.Season season = basketball ? null : valuer.load(league, currentWeek, lastWeek);
+            BasketballSeason basketballSeason = basketball ? basketballValuer.load(league, currentWeek, lastWeek) : null;
+            notes.addAll(basketball ? basketballSeason.notes() : season.notes());
+            if (basketball ? basketballSeason.projectionsAvailable() : season.projectionsAvailable()) {
                 List<String> slots = LineupSolver.startingSlots(snapshot.rosterPositions());
                 Map<Integer, List<PlayerSummary>> lineupPlayers = new HashMap<>();
                 List<PlayerSummary> everyone = new ArrayList<>();
@@ -92,7 +97,9 @@ public class StandingsService {
                     lineupPlayers.put(team.rosterId(), players);
                     everyone.addAll(players);
                 }
-                TeamProjector projector = new TeamProjector(slots, season, currentWeek, lastWeek, everyone);
+                TeamProjector projector = basketball
+                        ? new TeamProjector(slots, currentWeek, lastWeek, everyone, basketballSeason::project)
+                        : new TeamProjector(slots, season, currentWeek, lastWeek, everyone);
                 for (LeagueData.Team team : snapshot.teams()) {
                     strength.put(team.rosterId(),
                             ScoringCalculator.round(projector.restOfSeason(lineupPlayers.get(team.rosterId()))
@@ -113,6 +120,9 @@ public class StandingsService {
         if (odds != null) {
             notes.add("Odds come from %,d simulations of the remaining schedule using each team's best projected lineup; "
                     .formatted(SIMULATIONS) + "tiebreakers use points for, and divisions aren't modelled.");
+            if (league.sportType() == Sport.NBA) {
+                notes.add("Basketball strength counts one game per starter each week, at its Lock-In value.");
+            }
         }
         return new StandingsResponse(currentWeek, regularSeasonEnd, playoffTeams, odds != null ? SIMULATIONS : null,
                 rows(snapshot, strength, odds, userId), notes);

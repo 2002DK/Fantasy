@@ -6,17 +6,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
 
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.NotFoundException;
 import com.fantasy.league.SeasonCalendar;
-import com.fantasy.league.SportSupport;
+import com.fantasy.lockin.BasketballSeason;
+import com.fantasy.lockin.BasketballSeasonValuer;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.Positions;
 import com.fantasy.stats.ScoringCalculator;
 import com.fantasy.trade.TradeResponse.Side;
@@ -42,20 +45,21 @@ public class TradeService {
     private final PlayerService playerService;
     private final SeasonValuer valuer;
     private final SeasonCalendar calendar;
+    private final BasketballSeasonValuer basketballValuer;
 
     public TradeService(SleeperClient sleeperClient, PlayerService playerService, SeasonValuer valuer,
-            SeasonCalendar calendar) {
+            SeasonCalendar calendar, BasketballSeasonValuer basketballValuer) {
         this.sleeperClient = sleeperClient;
         this.playerService = playerService;
         this.valuer = valuer;
         this.calendar = calendar;
+        this.basketballValuer = basketballValuer;
     }
 
     public TradeResponse analyze(String leagueId, List<String> giveIds, List<String> getIds) {
         validateSides(giveIds, getIds);
         SleeperLeague league = sleeperClient.getLeague(leagueId)
                 .orElseThrow(() -> new NotFoundException("No Sleeper league found with ID '" + leagueId + "'"));
-        SportSupport.requireFootball(league, "The trade analyzer");
         int currentWeek;
         try {
             currentWeek = calendar.currentWeek(league);
@@ -63,19 +67,29 @@ public class TradeService {
             throw new InvalidRequestException(
                     "Trades can only be analyzed for the current season; this league is from " + league.season());
         }
-        int lastWeek = lastFantasyWeek(league.settings());
+        int lastWeek = SeasonCalendar.lastFantasyWeek(league);
         if (currentWeek > lastWeek) {
             throw new InvalidRequestException("This league's season is over (it ended in week " + lastWeek + ")");
         }
         List<PlayerSummary> give = giveIds.stream().map(id -> findPlayer(league, id)).toList();
         List<PlayerSummary> get = getIds.stream().map(id -> findPlayer(league, id)).toList();
 
-        SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);
-        Side giveSide = side(give, season);
-        Side getSide = side(get, season);
+        Function<PlayerSummary, TradePlayer> evaluate;
+        List<String> notes;
+        if (league.sportType() == Sport.NBA) {
+            BasketballSeason season = basketballValuer.load(league, currentWeek, lastWeek);
+            evaluate = season::evaluate;
+            notes = new ArrayList<>(season.notes());
+            notes.add("Basketball values are rest-of-season Lock-In points: one counted game per week.");
+        } else {
+            SeasonValuer.Season season = valuer.load(league, currentWeek, lastWeek);
+            evaluate = p -> valuer.evaluate(p, season);
+            notes = new ArrayList<>(season.notes());
+        }
+        Side giveSide = side(give, evaluate);
+        Side getSide = side(get, evaluate);
         Verdict verdict = verdict(giveSide, getSide);
 
-        List<String> notes = new ArrayList<>(season.notes());
         if (league.settings() != null && league.settings().tradeDeadline() > 0
                 && currentWeek > league.settings().tradeDeadline()) {
             notes.add(0, "This league's trade deadline (week %d) has passed.".formatted(league.settings().tradeDeadline()));
@@ -114,8 +128,8 @@ public class TradeService {
                 .orElseThrow(() -> new NotFoundException("No player found with ID '" + playerId + "'"));
     }
 
-    private Side side(List<PlayerSummary> players, SeasonValuer.Season season) {
-        List<TradePlayer> evaluated = players.stream().map(p -> valuer.evaluate(p, season)).toList();
+    private static Side side(List<PlayerSummary> players, Function<PlayerSummary, TradePlayer> evaluate) {
+        List<TradePlayer> evaluated = players.stream().map(evaluate).toList();
         return new Side(evaluated,
                 ScoringCalculator.round(evaluated.stream().mapToDouble(TradePlayer::restOfSeasonPoints).sum()),
                 ScoringCalculator.round(evaluated.stream().mapToDouble(TradePlayer::value).sum()));

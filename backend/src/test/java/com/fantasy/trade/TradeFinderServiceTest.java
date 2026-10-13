@@ -66,7 +66,7 @@ class TradeFinderServiceTest {
             return new TradePlayer(player, 1, points, null, 0, null, points, 0, points, null);
         });
 
-        TradeIdeasResponse response = new TradeFinderService(leagueData, calendar, valuer).findIdeas("L1", "me");
+        TradeIdeasResponse response = new TradeFinderService(leagueData, calendar, valuer, null).findIdeas("L1", "me");
 
         Idea best = response.ideas().getFirst();
         assertThat(best.partnerName()).isEqualTo("Partner");

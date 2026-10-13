@@ -1404,6 +1404,13 @@ tbody th {
   font-size: 0.8125rem;
 }
 
+/* Basketball: games that week, under the Lock-In value */
+.planner-games {
+  display: block;
+  font-size: 0.625rem;
+  color: var(--muted);
+}
+
 .planner-cell.bye {
   color: var(--muted);
   background: var(--bg);

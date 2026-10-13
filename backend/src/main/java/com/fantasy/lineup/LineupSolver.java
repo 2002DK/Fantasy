@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,6 +50,34 @@ public final class LineupSolver {
     private LineupSolver() {
     }
 
+    /**
+     * Which slots each candidate can fill, worked out once per solve: the improvement
+     * pass asks this for every candidate, slot and move, which dominated solve time
+     * (and the trade finder solves tens of thousands of lineups).
+     */
+    private static final class SlotFits {
+
+        private final List<Set<String>> eligible;
+        private final Map<Candidate, Long> masks = new IdentityHashMap<>();
+
+        SlotFits(List<String> slots) {
+            this.eligible = slots.stream().map(LineupSolver::eligiblePositions).toList();
+        }
+
+        boolean fits(Candidate candidate, int slot) {
+            long mask = masks.computeIfAbsent(candidate, c -> {
+                long m = 0;
+                for (int s = 0; s < eligible.size(); s++) {
+                    if (c.player().fitsAny(eligible.get(s))) {
+                        m |= 1L << s;
+                    }
+                }
+                return m;
+            });
+            return (mask >>> slot & 1) == 1;
+        }
+    }
+
     /** Positions a slot accepts; empty for slots like BN or IR. */
     public static Set<String> eligiblePositions(String slot) {
         if (FLEX_SLOTS.containsKey(slot)) {
@@ -73,6 +102,10 @@ public final class LineupSolver {
      * @return the chosen candidate per slot, aligned with {@code slots}; null where no one can fill it
      */
     public static List<Candidate> solve(List<String> slots, List<String> currentStarters, List<Candidate> roster) {
+        if (slots.size() > Long.SIZE) {
+            throw new IllegalArgumentException("At most " + Long.SIZE + " starting slots are supported");
+        }
+        SlotFits fits = new SlotFits(slots);
         Candidate[] lineup = new Candidate[slots.size()];
         boolean[] fixed = new boolean[slots.size()];
         Set<String> used = new HashSet<>();
@@ -80,7 +113,8 @@ public final class LineupSolver {
         // Locked starters and unscored slots keep their current player
         for (int i = 0; i < slots.size(); i++) {
             String currentId = i < currentStarters.size() ? currentStarters.get(i) : null;
-            Candidate current = roster.stream().filter(c -> c.id().equals(currentId)).findFirst().orElse(null);
+            Candidate current = currentId == null ? null
+                    : roster.stream().filter(c -> c.id().equals(currentId)).findFirst().orElse(null);
             if (!isScored(slots.get(i)) || (current != null && current.locked())) {
                 lineup[i] = current;
                 fixed[i] = true;
@@ -101,16 +135,16 @@ public final class LineupSolver {
                         .thenComparingInt(i -> i))
                 .toList();
         for (int i : open) {
-            Set<String> eligible = eligiblePositions(slots.get(i));
-            Candidate best = free.stream().filter(c -> c.player().fitsAny(eligible)).findFirst().orElse(null);
+            int slot = i;
+            Candidate best = free.stream().filter(c -> fits.fits(c, slot)).findFirst().orElse(null);
             if (best != null) {
                 lineup[i] = best;
                 free.remove(best);
             }
         }
 
-        improve(slots, lineup, open, free);
-        keepCurrentSlots(slots, lineup, open, currentStarters);
+        improve(fits, lineup, open, free);
+        keepCurrentSlots(fits, lineup, open, currentStarters);
         // Arrays.asList keeps null entries for slots nobody can fill (List.of would reject them)
         return Arrays.asList(lineup);
     }
@@ -121,7 +155,7 @@ public final class LineupSolver {
      * it must. Each swap settles one player in their current slot, so this terminates;
      * the total is unchanged.
      */
-    private static void keepCurrentSlots(List<String> slots, Candidate[] lineup, List<Integer> open,
+    private static void keepCurrentSlots(SlotFits fits, Candidate[] lineup, List<Integer> open,
             List<String> currentStarters) {
         boolean moved = true;
         while (moved) {
@@ -136,9 +170,7 @@ public final class LineupSolver {
                         continue;
                     }
                     Candidate other = lineup[i];
-                    boolean fits = lineup[j].player().fitsAny(eligiblePositions(slots.get(i)))
-                            && (other == null || other.player().fitsAny(eligiblePositions(slots.get(j))));
-                    if (fits) {
+                    if (fits.fits(lineup[j], i) && (other == null || fits.fits(other, j))) {
                         lineup[i] = lineup[j];
                         lineup[j] = other;
                         moved = true;
@@ -150,15 +182,14 @@ public final class LineupSolver {
     }
 
     /** Swaps that raise the total: bench-for-starter, or a starter moving slots to make room for a bench player. */
-    private static void improve(List<String> slots, Candidate[] lineup, List<Integer> open, List<Candidate> bench) {
+    private static void improve(SlotFits fits, Candidate[] lineup, List<Integer> open, List<Candidate> bench) {
         boolean improved = true;
         while (improved) {
             improved = false;
             outer:
             for (int i : open) {
-                Set<String> eligibleI = eligiblePositions(slots.get(i));
                 for (Candidate b : List.copyOf(bench)) {
-                    if (!b.player().fitsAny(eligibleI)) {
+                    if (!fits.fits(b, i)) {
                         continue;
                     }
                     // Direct replacement
@@ -173,9 +204,8 @@ public final class LineupSolver {
                             continue;
                         }
                         Candidate displaced = lineup[j];
-                        boolean fits = lineup[i].player().fitsAny(eligiblePositions(slots.get(j)));
                         double gain = b.points() - (displaced != null ? displaced.points() : 0);
-                        if (fits && gain > 1e-9) {
+                        if (gain > 1e-9 && fits.fits(lineup[i], j)) {
                             lineup[j] = lineup[i];
                             lineup[i] = b;
                             bench.remove(b);
