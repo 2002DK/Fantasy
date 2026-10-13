@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 /**
  * Minimal time-based cache. A loader that throws caches nothing, so the next call
  * retries. Concurrent misses may load twice, which is fine for idempotent GETs.
+ * Expired entries are dropped whenever a value is loaded.
  */
 public final class TtlCache<K, V> {
 
@@ -32,6 +33,8 @@ public final class TtlCache<K, V> {
             return entry.value();
         }
         V value = loader.get();
+        // Drop expired entries so keys that are never asked for again (old leagues, past weeks) don't pile up
+        entries.values().removeIf(e -> !e.expiresAt().isAfter(now));
         entries.put(key, new Entry<>(value, now.plus(ttl)));
         return value;
     }

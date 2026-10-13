@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.fantasy.lineup.TeamProjector.WeekProjection;
 import com.fantasy.lockin.LockInScorer.ScheduledGame;
@@ -51,7 +52,8 @@ public final class BasketballSeason {
     /** player ID -> projected points per game this season, in the league's scoring. */
     private final Map<String, Double> perGameProjections;
     private final List<String> notes;
-    private final Map<String, List<Week>> cache = new HashMap<>();
+    /** Per-player weeks; concurrent because a built season is shared between requests. */
+    private final Map<String, List<Week>> cache = new ConcurrentHashMap<>();
     private ReplacementLevels replacement;
 
     public BasketballSeason(LockInScorer scorer, LockInScorer.Week current, int currentWeek, int lastWeek,

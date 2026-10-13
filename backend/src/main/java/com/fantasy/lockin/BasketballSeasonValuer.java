@@ -1,5 +1,7 @@
 package com.fantasy.lockin;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
 import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.ScoringCalculator;
+import com.fantasy.stats.TtlCache;
 import com.fantasy.stats.WeeklyDataService;
 import com.fantasy.trade.ReplacementLevels;
 
@@ -41,20 +44,35 @@ public class BasketballSeasonValuer {
 
     private static final Logger log = LoggerFactory.getLogger(BasketballSeasonValuer.class);
 
+    private record SeasonKey(String leagueId, int currentWeek, int lastWeek) {
+    }
+
     private final LockInScorer scorer;
     private final LockInService lockInService;
     private final WeeklyDataService weeklyData;
     private final PlayerService playerService;
+    /**
+     * Built seasons, shared by the trade, league, planner and player tools for a few
+     * minutes: valuing every projected player for replacement levels takes seconds on a
+     * small host. Game statuses in the schedule refresh on the same interval.
+     */
+    private final TtlCache<SeasonKey, BasketballSeason> seasons;
 
     public BasketballSeasonValuer(LockInScorer scorer, LockInService lockInService, WeeklyDataService weeklyData,
-            PlayerService playerService) {
+            PlayerService playerService, Clock clock) {
         this.scorer = scorer;
         this.lockInService = lockInService;
         this.weeklyData = weeklyData;
         this.playerService = playerService;
+        this.seasons = new TtlCache<>(Duration.ofMinutes(10), clock);
     }
 
     public BasketballSeason load(SleeperLeague league, int currentWeek, int lastWeek) {
+        return seasons.get(new SeasonKey(league.leagueId(), currentWeek, lastWeek),
+                () -> build(league, currentWeek, lastWeek));
+    }
+
+    private BasketballSeason build(SleeperLeague league, int currentWeek, int lastWeek) {
         LockInScorer.Week current = scorer.load(league, currentWeek);
         List<String> notes = new ArrayList<>(current.notes());
         Map<Integer, Map<String, List<ScheduledGame>>> schedule = loadSchedule(league.season(), currentWeek, lastWeek,
