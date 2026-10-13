@@ -18,6 +18,7 @@ import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.DefenseTable;
 import com.fantasy.stats.ScoringCalculator;
 import com.fantasy.stats.WeeklyDataService;
@@ -115,7 +116,7 @@ public class SeasonValuer {
     private Map<Integer, Map<String, SleeperGame>> loadGames(String season, int from, int to, List<String> notes) {
         try {
             Map<Integer, Map<String, SleeperGame>> byWeek = new HashMap<>();
-            for (SleeperGame game : weeklyData.schedule(season)) {
+            for (SleeperGame game : weeklyData.schedule(Sport.NFL, season)) {
                 if (game.week() >= from && game.week() <= to && !game.isCanceled()) {
                     Map<String, SleeperGame> byTeam = byWeek.computeIfAbsent(game.week(), w -> new HashMap<>());
                     byTeam.put(game.home(), game);
@@ -134,7 +135,8 @@ public class SeasonValuer {
             List<String> notes) {
         try {
             Map<Integer, Map<String, SleeperWeeklyEntry>> byWeek = new HashMap<>();
-            weeklyData.projections(season, from, to).forEach((week, entries) -> byWeek.put(week, indexByPlayer(entries)));
+            weeklyData.projections(Sport.NFL, season, from, to)
+                    .forEach((week, entries) -> byWeek.put(week, indexByPlayer(entries)));
             return byWeek;
         } catch (RestClientException e) {
             log.warn("Projections unavailable for {} weeks {}-{}", season, from, to, e);
@@ -152,7 +154,7 @@ public class SeasonValuer {
         try {
             List<List<SleeperWeeklyEntry>> weeks = new ArrayList<>();
             for (int w = currentWeek - 1; w >= 1; w--) {
-                weeks.add(weeklyData.stats(season, w));
+                weeks.add(weeklyData.stats(Sport.NFL, season, w));
             }
             return weeks;
         } catch (RestClientException e) {

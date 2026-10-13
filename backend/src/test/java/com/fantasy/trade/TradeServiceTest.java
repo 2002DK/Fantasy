@@ -77,18 +77,18 @@ class TradeServiceTest {
         lenient().when(sleeperClient.getState(Sport.NFL)).thenReturn(new SeasonState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA, CEE, DEE);
         stubPlayerService();
-        lenient().when(weeklyData.schedule("2026")).thenReturn(List.of(
+        lenient().when(weeklyData.schedule(Sport.NFL, "2026")).thenReturn(List.of(
                 new SleeperGame("g1", 3, "PHI", "NYJ", "pre_game"),
                 new SleeperGame("g2", 3, "SF", "DAL", "pre_game"),
                 new SleeperGame("g3", 3, "KC", "LV", "complete"),
                 new SleeperGame("g4", 4, "PHI", "DAL", "pre_game"),
                 new SleeperGame("g5", 4, "KC", "NYJ", "pre_game")));
-        lenient().when(weeklyData.projections("2026", 3, 4)).thenReturn(Map.of(
+        lenient().when(weeklyData.projections(Sport.NFL, "2026", 3, 4)).thenReturn(Map.of(
                 3, List.of(rushing("A", 3, 100), rushing("B", 3, 80), rushing("C", 3, 90), rushing("D", 3, 50)),
                 4, List.of(rushing("A", 4, 100), rushing("C", 4, 90), rushing("D", 4, 50))));
-        lenient().when(weeklyData.stats("2026", 2)).thenReturn(List.of(
+        lenient().when(weeklyData.stats(Sport.NFL, "2026", 2)).thenReturn(List.of(
                 rushing("A", 2, 120), rushing("B", 2, 60), defense("NYJ", 2, 30), defense("DAL", 2, 10)));
-        lenient().when(weeklyData.stats("2026", 1)).thenReturn(List.of(
+        lenient().when(weeklyData.stats(Sport.NFL, "2026", 1)).thenReturn(List.of(
                 rushing("A", 1, 140), defense("NYJ", 1, 30), defense("DAL", 1, 10)));
     }
 
@@ -162,7 +162,7 @@ class TradeServiceTest {
 
     @Test
     void missingProjectionsFallBackToFormWithoutScarcity() {
-        given(weeklyData.projections(eq("2026"), anyInt(), anyInt())).willThrow(new ResourceAccessException("timeout"));
+        given(weeklyData.projections(eq(Sport.NFL), eq("2026"), anyInt(), anyInt())).willThrow(new ResourceAccessException("timeout"));
 
         TradeResponse response = service.analyze(LEAGUE_ID, List.of("A"), List.of("B"));
 

@@ -12,8 +12,8 @@ import com.fantasy.sleeper.Sport;
 public class SeasonCalendar {
 
     public static final int LAST_NFL_WEEK = 18;
-    /** Sleeper basketball seasons run about 25 weeks including playoffs. */
-    public static final int LAST_NBA_WEEK = 26;
+    /** The basketball schedule has 25 weeks, the last ending with the regular season in April. */
+    public static final int LAST_NBA_WEEK = 25;
     /** Sleeper's default: playoffs start in week 15, so the regular season ends in week 14. */
     public static final int DEFAULT_REGULAR_SEASON_END = 14;
     /** Last fantasy week when the league has not set its playoff start. */

@@ -15,6 +15,7 @@ import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.startsit.StartSitResponse.Matchup;
 import com.fantasy.startsit.StartSitResponse.PlayerAnalysis;
 import com.fantasy.startsit.StartSitResponse.RecentGame;
@@ -114,7 +115,7 @@ public class WeeklyScorer {
     private Map<String, Opponent> loadOpponents(String season, int week, List<String> notes) {
         try {
             Map<String, Opponent> opponents = new HashMap<>();
-            for (SleeperGame game : weeklyData.schedule(season)) {
+            for (SleeperGame game : weeklyData.schedule(Sport.NFL, season)) {
                 if (game.week() == week && !game.isCanceled()) {
                     opponents.put(game.home(), new Opponent(game.away(), true, game.status()));
                     opponents.put(game.away(), new Opponent(game.home(), false, game.status()));
@@ -130,7 +131,7 @@ public class WeeklyScorer {
 
     private Map<String, SleeperWeeklyEntry> loadProjections(String season, int week, List<String> notes) {
         try {
-            return indexByPlayer(weeklyData.projections(season, week));
+            return indexByPlayer(weeklyData.projections(Sport.NFL, season, week));
         } catch (RestClientException e) {
             log.warn("Projections unavailable for {} week {}", season, week, e);
             notes.add("Projections are unavailable right now; this uses recent form and matchup only.");
@@ -147,7 +148,7 @@ public class WeeklyScorer {
         try {
             List<List<SleeperWeeklyEntry>> weeks = new ArrayList<>();
             for (int w = week - 1; w >= 1; w--) {
-                weeks.add(weeklyData.stats(season, w));
+                weeks.add(weeklyData.stats(Sport.NFL, season, w));
             }
             return weeks;
         } catch (RestClientException e) {

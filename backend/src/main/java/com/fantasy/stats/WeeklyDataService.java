@@ -16,15 +16,19 @@ import org.springframework.web.client.RestClientException;
 import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperStatsClient;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
+import com.fantasy.sleeper.Sport;
 
 /**
- * Cached access to weekly projections, stats and the schedule. Each response is
+ * Cached access to projections, stats and schedules for each sport. Each response is
  * shared by every league and user, so one download serves all comparisons.
  */
 @Service
 public class WeeklyDataService {
 
-    private record SeasonWeek(String season, int week) {
+    private record SeasonWeek(Sport sport, String season, int week) {
+    }
+
+    private record SportSeason(Sport sport, String season) {
     }
 
     static final int MAX_PARALLEL_DOWNLOADS = 4;
@@ -34,7 +38,7 @@ public class WeeklyDataService {
     private final TtlCache<SeasonWeek, List<SleeperWeeklyEntry>> projections;
     /** Stats for completed weeks rarely change after stat corrections early in the next week. */
     private final TtlCache<SeasonWeek, List<SleeperWeeklyEntry>> stats;
-    private final TtlCache<String, List<SleeperGame>> schedules;
+    private final TtlCache<SportSeason, List<SleeperGame>> schedules;
 
     public WeeklyDataService(SleeperStatsClient statsClient, Clock clock) {
         this.statsClient = statsClient;
@@ -44,12 +48,14 @@ public class WeeklyDataService {
     }
 
     /**
-     * Only players with a projected game are kept: a week's response lists ~3,300
-     * players but only ~500 have a projection, and the rest are empty rows.
+     * Only players with a projected game are kept: a football week's response lists
+     * ~3,300 players but only ~500 have a projection, and the rest are empty rows.
+     * Basketball has one entry per projected game.
      */
-    public List<SleeperWeeklyEntry> projections(String season, int week) {
-        return projections.get(new SeasonWeek(season, week),
-                () -> statsClient.getProjections(season, week).stream().filter(SleeperWeeklyEntry::played).toList());
+    public List<SleeperWeeklyEntry> projections(Sport sport, String season, int week) {
+        return projections.get(new SeasonWeek(sport, season, week),
+                () -> statsClient.getProjections(sport, season, week).stream()
+                        .filter(SleeperWeeklyEntry::played).toList());
     }
 
     /**
@@ -58,14 +64,14 @@ public class WeeklyDataService {
      * response is ~2 MB of JSON, so at most {@link #MAX_PARALLEL_DOWNLOADS} are parsed
      * at once to keep memory within a small (512 MB) host.
      */
-    public Map<Integer, List<SleeperWeeklyEntry>> projections(String season, int from, int to) {
+    public Map<Integer, List<SleeperWeeklyEntry>> projections(Sport sport, String season, int from, int to) {
         Map<Integer, List<SleeperWeeklyEntry>> byWeek = new TreeMap<>();
         try (ExecutorService executor = Executors.newFixedThreadPool(MAX_PARALLEL_DOWNLOADS,
                 Thread.ofVirtual().factory())) {
             Map<Integer, Future<List<SleeperWeeklyEntry>>> futures = new TreeMap<>();
             for (int week = from; week <= to; week++) {
                 int w = week;
-                futures.put(w, executor.submit(() -> projections(season, w)));
+                futures.put(w, executor.submit(() -> projections(sport, season, w)));
             }
             for (var entry : futures.entrySet()) {
                 byWeek.put(entry.getKey(), entry.getValue().get());
@@ -82,11 +88,11 @@ public class WeeklyDataService {
         return byWeek;
     }
 
-    public List<SleeperWeeklyEntry> stats(String season, int week) {
-        return stats.get(new SeasonWeek(season, week), () -> statsClient.getStats(season, week));
+    public List<SleeperWeeklyEntry> stats(Sport sport, String season, int week) {
+        return stats.get(new SeasonWeek(sport, season, week), () -> statsClient.getStats(sport, season, week));
     }
 
-    public List<SleeperGame> schedule(String season) {
-        return schedules.get(season, () -> statsClient.getSchedule(season));
+    public List<SleeperGame> schedule(Sport sport, String season) {
+        return schedules.get(new SportSeason(sport, season), () -> statsClient.getSchedule(sport, season));
     }
 }

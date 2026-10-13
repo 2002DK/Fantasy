@@ -65,15 +65,15 @@ class StartSitServiceTest {
                 LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, List.of(), Map.of("rush_yd", 0.1), null)));
         lenient().when(sleeperClient.getState(Sport.NFL)).thenReturn(new SeasonState("2026", 3, "regular"));
         givenPlayers(ALPHA, BETA);
-        lenient().when(weeklyData.schedule("2026")).thenReturn(List.of(
+        lenient().when(weeklyData.schedule(Sport.NFL, "2026")).thenReturn(List.of(
                 new SleeperGame("g1", 3, "PHI", "NYJ", "pre_game"),
                 new SleeperGame("g2", 3, "DAL", "SF", "pre_game")));
-        lenient().when(weeklyData.projections("2026", 3)).thenReturn(List.of(
+        lenient().when(weeklyData.projections(Sport.NFL, "2026", 3)).thenReturn(List.of(
                 rushing("A", "PHI", "NYJ", 3, 100), rushing("B", "SF", "DAL", 3, 60)));
-        lenient().when(weeklyData.stats("2026", 2)).thenReturn(List.of(
+        lenient().when(weeklyData.stats(Sport.NFL, "2026", 2)).thenReturn(List.of(
                 rushing("A", "PHI", "WAS", 2, 150), rushing("B", "SF", "LAR", 2, 50),
                 defense("NYJ", 2, 32), defense("DAL", 2, 12)));
-        lenient().when(weeklyData.stats("2026", 1)).thenReturn(List.of(
+        lenient().when(weeklyData.stats(Sport.NFL, "2026", 1)).thenReturn(List.of(
                 rushing("A", "PHI", "DAL", 1, 130), rushing("B", "SF", "SEA", 1, 70),
                 defense("NYJ", 1, 28), defense("DAL", 1, 8)));
     }
@@ -104,7 +104,7 @@ class StartSitServiceTest {
 
     @Test
     void notesWhenAPlayersGameHasKickedOff() {
-        given(weeklyData.schedule("2026")).willReturn(List.of(
+        given(weeklyData.schedule(Sport.NFL, "2026")).willReturn(List.of(
                 new SleeperGame("g1", 3, "PHI", "NYJ", "complete"),
                 new SleeperGame("g2", 3, "DAL", "SF", "pre_game")));
 
@@ -152,7 +152,7 @@ class StartSitServiceTest {
 
     @Test
     void missingProjectionsFallBackToMatchupAdjustedForm() {
-        given(weeklyData.projections("2026", 3)).willThrow(new ResourceAccessException("timeout"));
+        given(weeklyData.projections(Sport.NFL, "2026", 3)).willThrow(new ResourceAccessException("timeout"));
 
         StartSitResponse response = service.compare(LEAGUE_ID, "A", "B", 3);
 
@@ -164,11 +164,11 @@ class StartSitServiceTest {
 
     @Test
     void closeScoresAreATossUp() {
-        given(weeklyData.projections("2026", 3)).willReturn(List.of(
+        given(weeklyData.projections(Sport.NFL, "2026", 3)).willReturn(List.of(
                 rushing("A", "PHI", "NYJ", 3, 100), rushing("B", "SF", "DAL", 3, 100)));
-        given(weeklyData.stats("2026", 2)).willReturn(List.of(
+        given(weeklyData.stats(Sport.NFL, "2026", 2)).willReturn(List.of(
                 rushing("A", "PHI", "WAS", 2, 100), rushing("B", "SF", "LAR", 2, 103)));
-        given(weeklyData.stats("2026", 1)).willReturn(List.of());
+        given(weeklyData.stats(Sport.NFL, "2026", 1)).willReturn(List.of());
 
         StartSitResponse response = service.compare(LEAGUE_ID, "A", "B", 3);
 
@@ -178,9 +178,9 @@ class StartSitServiceTest {
 
     @Test
     void weekOneHasNoFormOrMatchupData() {
-        given(weeklyData.projections("2026", 1)).willReturn(List.of(
+        given(weeklyData.projections(Sport.NFL, "2026", 1)).willReturn(List.of(
                 rushing("A", "PHI", "NYJ", 1, 100), rushing("B", "SF", "DAL", 1, 60)));
-        given(weeklyData.schedule("2026")).willReturn(List.of(
+        given(weeklyData.schedule(Sport.NFL, "2026")).willReturn(List.of(
                 new SleeperGame("g1", 1, "PHI", "NYJ", "pre_game"), new SleeperGame("g2", 1, "DAL", "SF", "pre_game")));
 
         StartSitResponse response = service.compare(LEAGUE_ID, "A", "B", 1);
