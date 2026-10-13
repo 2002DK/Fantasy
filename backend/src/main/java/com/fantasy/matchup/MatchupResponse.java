@@ -22,8 +22,16 @@ public record MatchupResponse(int week, Side you, Side opponent, Double winProba
             List<Starter> starters) {
     }
 
-    /** {@code status} is "upcoming", "live" or "final" (or "bye"/"empty"). */
+    /**
+     * {@code status} is "upcoming", "live" or "final" (or "bye"/"empty"). {@code gamesLeft}
+     * is set for basketball, where {@code expectedPoints} is the slot's Lock-In value.
+     */
     public record Starter(String slot, PlayerSummary player, double expectedPoints, double actualPoints,
-            double projectedPoints, String status, String opponent) {
+            double projectedPoints, String status, String opponent, Integer gamesLeft) {
+
+        public Starter(String slot, PlayerSummary player, double expectedPoints, double actualPoints,
+                double projectedPoints, String status, String opponent) {
+            this(slot, player, expectedPoints, actualPoints, projectedPoints, status, opponent, null);
+        }
     }
 }

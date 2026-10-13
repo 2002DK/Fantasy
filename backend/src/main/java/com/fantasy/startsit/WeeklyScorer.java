@@ -219,7 +219,7 @@ public class WeeklyScorer {
     }
 
     /** Scales form by how the opponent's points allowed compare to the league average, capped at ±15%. */
-    static double matchupMultiplier(Matchup matchup) {
+    public static double matchupMultiplier(Matchup matchup) {
         if (matchup == null || matchup.allowedPerGame() == null || matchup.leagueAverage() == null
                 || matchup.leagueAverage() <= 0) {
             return 1.0;

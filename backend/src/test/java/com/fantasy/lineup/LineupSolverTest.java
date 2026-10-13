@@ -64,6 +64,34 @@ class LineupSolverTest {
         assertThat(LineupSolver.startingSlots(List.of("QB", "FLEX", "BN", "BN", "IR"))).containsExactly("QB", "FLEX");
     }
 
+    @Test
+    void basketballPlayersFillAnySlotTheirPositionsAllow() {
+        // The center is the only one who can play C; the PF/SF wing takes F ahead of the PG
+        List<Candidate> roster = List.of(
+                multi("pg", 40, "PG"), multi("wing", 35, "SF", "PF"), multi("big", 20, "C"), multi("guard", 30, "SG"));
+
+        List<Candidate> lineup = LineupSolver.solve(List.of("C", "F", "G", "UTIL"), List.of(), roster);
+
+        assertThat(ids(lineup)).containsExactly("big", "wing", "pg", "guard");
+    }
+
+    @Test
+    void startersWhoStayKeepTheirCurrentSlots() {
+        // Greedy fill would move the SG/SF wing to SG and the guard to UTIL; only UTIL needs to change
+        List<Candidate> roster = List.of(
+                multi("guard", 30, "PG", "SG"), multi("wing", 45, "SG", "SF"), multi("benchwarmer", 10, "PG"),
+                multi("star", 50, "PF", "SF"));
+
+        List<Candidate> lineup = LineupSolver.solve(List.of("SG", "F", "UTIL"), List.of("guard", "wing",
+                "benchwarmer"), roster);
+
+        assertThat(ids(lineup)).containsExactly("guard", "wing", "star");
+    }
+
+    private static Candidate multi(String id, double points, String... positions) {
+        return new Candidate(new PlayerSummary(id, id, positions[0], "PHI", null, List.of(positions)), points, false);
+    }
+
     private static List<String> ids(List<Candidate> lineup) {
         return Arrays.asList(lineup.stream().map(c -> c == null ? null : c.player().playerId()).toArray(String[]::new));
     }

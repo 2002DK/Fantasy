@@ -2,6 +2,7 @@ package com.fantasy.startsit;
 
 import java.util.List;
 
+import com.fantasy.lockin.LockInScorer;
 import com.fantasy.player.PlayerSummary;
 
 /**
@@ -38,7 +39,25 @@ public record StartSitResponse(
             List<RecentGame> recentGames,
             Matchup matchup,
             /** Blended score used for the decision; 0 when unavailable, null when no data. */
-            Double score) {
+            Double score,
+            /** Basketball only: the rest of the week under Lock-In; null for football. */
+            LockInDetail lockIn) {
+
+        public PlayerAnalysis(PlayerSummary player, boolean available, String availabilityNote,
+                Double projectedPoints, Double recentAverage, List<RecentGame> recentGames, Matchup matchup,
+                Double score) {
+            this(player, available, availabilityNote, projectedPoints, recentAverage, recentGames, matchup, score,
+                    null);
+        }
+    }
+
+    /**
+     * A basketball player's remaining games this week. {@code projectedPoints} and
+     * {@code recentAverage} above are per game, and {@code score} is the Lock-In value.
+     * {@code thresholds} line up with {@code games}: after each game, lock a score above
+     * it; the last game's is 0 because it counts if nothing was locked.
+     */
+    public record LockInDetail(List<LockInScorer.GameOutlook> games, List<Double> thresholds) {
     }
 
     public record RecentGame(int week, String opponent, double points) {

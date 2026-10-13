@@ -14,34 +14,48 @@ import org.springframework.stereotype.Service;
 
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
-import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupResponse.LineupPlayer;
 import com.fantasy.lineup.LineupSolver.Candidate;
+import com.fantasy.lockin.LockInScorer;
 import com.fantasy.player.PlayerSummary;
+import com.fantasy.sleeper.SleeperClient;
+import com.fantasy.sleeper.SleeperMatchup;
 import com.fantasy.sleeper.SleeperRoster;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.startsit.StartSitResponse.PlayerAnalysis;
 import com.fantasy.startsit.WeeklyScorer;
 import com.fantasy.stats.ScoringCalculator;
 
-/** Finds the lineup with the most expected points this week and explains how it differs from the current one. */
+/**
+ * Finds the lineup with the most expected points this week and explains how it differs
+ * from the current one. Basketball uses each player's Lock-In value for the rest of the
+ * week, since one game per starter counts.
+ */
 @Service
 public class LineupService {
 
     private final LeagueData leagueData;
     private final SeasonCalendar calendar;
     private final WeeklyScorer scorer;
+    private final LockInScorer lockInScorer;
+    private final SleeperClient sleeperClient;
 
-    public LineupService(LeagueData leagueData, SeasonCalendar calendar, WeeklyScorer scorer) {
+    public LineupService(LeagueData leagueData, SeasonCalendar calendar, WeeklyScorer scorer,
+            LockInScorer lockInScorer, SleeperClient sleeperClient) {
         this.leagueData = leagueData;
         this.calendar = calendar;
         this.scorer = scorer;
+        this.lockInScorer = lockInScorer;
+        this.sleeperClient = sleeperClient;
     }
 
     public LineupResponse optimize(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
-        SportSupport.requireFootball(snapshot.league(), "The lineup optimizer");
         LeagueData.Team team = snapshot.teamOf(userId);
         int week = calendar.currentWeek(snapshot.league());
+        if (snapshot.league().sportType() == Sport.NBA) {
+            return optimizeBasketball(snapshot, team, week);
+        }
         WeeklyScorer.Week data = scorer.load(snapshot.league(), week);
 
         SleeperRoster roster = team.roster();
@@ -85,6 +99,96 @@ public class LineupService {
         return new LineupResponse(week, result, ScoringCalculator.round(currentTotal),
                 ScoringCalculator.round(optimalTotal), ScoringCalculator.round(optimalTotal - currentTotal),
                 changes(result), notes);
+    }
+
+    /**
+     * Each player is worth their Lock-In value for the games left this week. A starter
+     * who already has a score this week is worth the better of keeping it and waiting
+     * (they can lock it before their next game), and stays in place: benching them could
+     * lose that score. Players in a game right now can't move.
+     */
+    private LineupResponse optimizeBasketball(LeagueData.Snapshot snapshot, LeagueData.Team team, int week) {
+        LockInScorer.Week data = lockInScorer.load(snapshot.league(), week);
+        SleeperRoster roster = team.roster();
+        Map<String, Double> counted = countedPoints(snapshot.league().leagueId(), week, team.rosterId());
+        Set<String> starterIds = new HashSet<>(orEmpty(roster.starters()));
+        Set<String> unavailableForLineup = new HashSet<>();
+        unavailableForLineup.addAll(orEmpty(roster.reserve()));
+        unavailableForLineup.addAll(orEmpty(roster.taxi()));
+
+        Map<String, LineupPlayer> byId = new HashMap<>();
+        List<Candidate> candidates = new ArrayList<>();
+        boolean benchPlayed = false;
+        boolean anyScored = false;
+        boolean anyPlaying = false;
+        for (PlayerSummary player : team.players()) {
+            LockInScorer.Analysis analysis = lockInScorer.analyze(player, data);
+            double score = counted.getOrDefault(player.playerId(), 0.0);
+            boolean starter = starterIds.contains(player.playerId());
+            boolean hasScore = starter && score > 0 && data.gamesPlayed(player) > 0;
+            double value = hasScore ? Math.max(score, analysis.value()) : analysis.value();
+            boolean locked = hasScore || data.isPlaying(player);
+            anyScored |= hasScore;
+            anyPlaying |= data.isPlaying(player);
+            benchPlayed |= !starter && data.gamesPlayed(player) > 0;
+            LineupPlayer lineupPlayer = new LineupPlayer(player, ScoringCalculator.round(value),
+                    analysis.available() || hasScore, analysis.availabilityNote(),
+                    gamesLabel(analysis.games().size(), hasScore ? score : null), locked);
+            byId.put(player.playerId(), lineupPlayer);
+            if (!unavailableForLineup.contains(player.playerId())) {
+                candidates.add(new Candidate(player, lineupPlayer.expectedPoints(), locked));
+            }
+        }
+
+        List<String> slots = LineupSolver.startingSlots(snapshot.rosterPositions());
+        List<String> currentIds = orEmpty(roster.starters());
+        List<Candidate> optimal = LineupSolver.solve(slots, currentIds, candidates);
+        List<LineupResponse.Slot> result = new ArrayList<>();
+        double currentTotal = 0;
+        double optimalTotal = 0;
+        for (int i = 0; i < slots.size(); i++) {
+            String currentId = i < currentIds.size() ? currentIds.get(i) : null;
+            LineupPlayer current = currentId != null ? byId.get(currentId) : null;
+            LineupPlayer best = optimal.get(i) != null ? byId.get(optimal.get(i).player().playerId()) : null;
+            currentTotal += current != null ? current.expectedPoints() : 0;
+            optimalTotal += best != null ? best.expectedPoints() : 0;
+            result.add(new LineupResponse.Slot(slots.get(i), current, best, LineupSolver.isScored(slots.get(i))));
+        }
+
+        List<String> notes = new ArrayList<>(data.notes());
+        notes.add("Points are Lock-In values: what each player's week is expected to count with the best "
+                + "lock-or-pass choices over their remaining games.");
+        if (anyScored) {
+            notes.add("Starters who already have a score this week stay in place, since they can still lock it.");
+        }
+        if (benchPlayed) {
+            notes.add("Games played on your bench can't be locked, so bench players count only their remaining games.");
+        }
+        if (anyPlaying) {
+            notes.add("Players in a game right now are locked in place.");
+        }
+        return new LineupResponse(week, result, ScoringCalculator.round(currentTotal),
+                ScoringCalculator.round(optimalTotal), ScoringCalculator.round(optimalTotal - currentTotal),
+                changes(result), notes);
+    }
+
+    /**
+     * Each starter's score this week as Sleeper counts it so far. Before any game, and
+     * when the league has no matchup this week, it is empty.
+     */
+    private Map<String, Double> countedPoints(String leagueId, int week, int rosterId) {
+        return sleeperClient.getMatchups(leagueId, week).stream()
+                .filter(m -> m.rosterId() == rosterId && m.playersPoints() != null)
+                .findFirst().map(SleeperMatchup::playersPoints).orElse(Map.of());
+    }
+
+    /** "3 games left", or "Scored 41.5 · 1 game left" for a starter with a score. */
+    static String gamesLabel(int gamesLeft, Double score) {
+        String left = gamesLeft == 0 ? "no games left" : gamesLeft == 1 ? "1 game left" : gamesLeft + " games left";
+        if (score == null) {
+            return Character.toUpperCase(left.charAt(0)) + left.substring(1);
+        }
+        return "Scored %s · %s".formatted(fmt(score), left);
     }
 
     private LineupPlayer lineupPlayer(PlayerSummary player, WeeklyScorer.Week data) {
@@ -135,6 +239,9 @@ public class LineupService {
         return switch (availabilityNote) {
             case "On bye" -> "on bye";
             case "Not on an NFL team" -> "not on an NFL team";
+            case "Not on an NBA team" -> "not on an NBA team";
+            case "No games left" -> "out of games this week";
+            case "No games this week" -> "without a game this week";
             default -> "listed as " + availabilityNote;
         };
     }
@@ -144,7 +251,7 @@ public class LineupService {
     }
 
     private static String fmt(double points) {
-        return "%.1f".formatted(points);
+        return ScoringCalculator.oneDecimal(points);
     }
 
     private static <T> List<T> orEmpty(List<T> list) {

@@ -7,6 +7,14 @@ import { ErrorMessage, Loading } from './Status.jsx'
 
 const STATUS_LABELS = { final: 'Final', live: 'Live', upcoming: '', bye: 'Bye', empty: '' }
 
+/** Basketball: "2 left" while a starter has games to play, "No games" for a week without any. */
+function statusLabel(starter) {
+  if (starter.gamesLeft == null) return STATUS_LABELS[starter.status]
+  if (starter.status === 'bye') return 'No games'
+  if (starter.status === 'final') return 'Done'
+  return `${starter.gamesLeft} left`
+}
+
 function Starters({ side }) {
   return (
     <ul className="player-list matchup-starters">
@@ -21,9 +29,12 @@ function Starters({ side }) {
                 <InjuryTag status={s.player.injuryStatus} />
                 <span className="muted small"> {s.opponent ?? ''}</span>
               </span>
-              <span className={`game-status ${s.status}`}>{STATUS_LABELS[s.status]}</span>
+              <span className={`game-status ${s.status}`}>{statusLabel(s)}</span>
               <span className="matchup-points">
-                {s.status === 'upcoming' ? formatPoints(s.expectedPoints) : formatPoints(s.actualPoints)}
+                {/* Basketball starters with games left show the slot's expected count, which includes any score */}
+                {s.status === 'upcoming' || s.gamesLeft > 0
+                  ? formatPoints(s.expectedPoints)
+                  : formatPoints(s.actualPoints)}
               </span>
             </>
           ) : (

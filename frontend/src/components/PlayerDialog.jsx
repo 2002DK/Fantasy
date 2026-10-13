@@ -6,10 +6,11 @@ import { InjuryTag, PositionChip } from './PlayerBadges.jsx'
 import { PlayerContext, useOpenPlayer } from './playerContext.js'
 import { ErrorMessage, Loading } from './Status.jsx'
 
-/** A player's name as a button that opens their detail dialog. */
+/** A player's name as a button that opens their detail dialog, or plain text where details are unavailable. */
 export function PlayerLink({ player, children }) {
   const openPlayer = useOpenPlayer()
   const label = player.name ?? `Player ${player.playerId}`
+  if (!openPlayer) return <span>{children ?? label}</span>
   return (
     <button type="button" className="player-link" onClick={() => openPlayer(player.playerId)}>
       {children ?? label}
@@ -132,8 +133,10 @@ function PlayerDetail({ leagueId, userId, playerId }) {
 /**
  * Provides useOpenPlayer() to its children and renders the detail dialog. Uses the native
  * <dialog> element, which traps focus, closes on Escape and restores focus on close.
+ * With {@code enabled} false (basketball, until player details support it) useOpenPlayer()
+ * returns null and names render as plain text.
  */
-export default function PlayerDialogProvider({ leagueId, userId, children }) {
+export default function PlayerDialogProvider({ leagueId, userId, enabled = true, children }) {
   const [playerId, setPlayerId] = useState(null)
   const dialogRef = useRef(null)
 
@@ -145,7 +148,7 @@ export default function PlayerDialogProvider({ leagueId, userId, children }) {
   }, [playerId])
 
   return (
-    <PlayerContext.Provider value={setPlayerId}>
+    <PlayerContext.Provider value={enabled ? setPlayerId : null}>
       {children}
       <dialog
         ref={dialogRef}

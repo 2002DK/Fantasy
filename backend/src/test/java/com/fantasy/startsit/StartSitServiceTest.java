@@ -2,6 +2,8 @@ package com.fantasy.startsit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
 
@@ -18,6 +20,8 @@ import org.springframework.web.client.ResourceAccessException;
 
 import com.fantasy.league.InvalidRequestException;
 import com.fantasy.league.SeasonCalendar;
+import com.fantasy.lockin.LockInScorer;
+import com.fantasy.lockin.LockInService;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SeasonState;
@@ -60,7 +64,7 @@ class StartSitServiceTest {
     @BeforeEach
     void setUp() {
         service = new StartSitService(sleeperClient, playerService, new WeeklyScorer(weeklyData),
-                new SeasonCalendar(sleeperClient));
+                new SeasonCalendar(sleeperClient), null);
         lenient().when(sleeperClient.getLeague(LEAGUE_ID)).thenReturn(Optional.of(new SleeperLeague(
                 LEAGUE_ID, "Dynasty", "2026", "in_season", 12, null, List.of(), Map.of("rush_yd", 0.1), null)));
         lenient().when(sleeperClient.getState(Sport.NFL)).thenReturn(new SeasonState("2026", 3, "regular"));
@@ -223,6 +227,46 @@ class StartSitServiceTest {
         assertThat(StartSitService.ordinal(22)).isEqualTo("22nd");
     }
 
+    /**
+     * Basketball under Lock-In: a guard with two 30-point games is worth about 36 (the
+     * better of two tries), less than a center's single 40-point game.
+     */
+    @Test
+    void basketballComparesLockInValues() {
+        SleeperLeague hoops = new SleeperLeague("H1", "Hoops", "2026", "in_season", 10, null, List.of("PG", "C"),
+                Map.of("pts", 1.0), null, "nba");
+        PlayerSummary guard = new PlayerSummary("G", "Guard", "PG", "PHI", null);
+        PlayerSummary center = new PlayerSummary("C", "Center", "C", "BOS", null);
+        given(sleeperClient.getLeague("H1")).willReturn(Optional.of(hoops));
+        given(sleeperClient.getState(Sport.NBA)).willReturn(new SeasonState("2026", 3, "regular"));
+        given(playerService.findSummary(Sport.NBA, "G")).willReturn(Optional.of(guard));
+        given(playerService.findSummary(Sport.NBA, "C")).willReturn(Optional.of(center));
+        given(weeklyData.schedule(Sport.NBA, "2026")).willReturn(List.of(
+                new SleeperGame("g1", 3, "PHI", "NYK", "pre_game", "2026-11-03"),
+                new SleeperGame("g2", 3, "MIA", "PHI", "pre_game", "2026-11-05"),
+                new SleeperGame("g3", 3, "BOS", "ATL", "pre_game", "2026-11-04")));
+        given(weeklyData.projections(Sport.NBA, "2026", 3)).willReturn(List.of(
+                perGame("G", "g1", "2026-11-03", "NYK", 30), perGame("G", "g2", "2026-11-05", "MIA", 30),
+                perGame("C", "g3", "2026-11-04", "ATL", 40)));
+        given(weeklyData.stats(eq(Sport.NBA), eq("2026"), anyInt())).willReturn(List.of());
+        StartSitService basketball = new StartSitService(sleeperClient, playerService, new WeeklyScorer(weeklyData),
+                new SeasonCalendar(sleeperClient), new LockInScorer(weeklyData, new LockInService(weeklyData),
+                        playerService));
+
+        StartSitResponse response = basketball.compare("H1", "G", "C", null);
+
+        PlayerAnalysis guardAnalysis = response.players().getFirst();
+        assertThat(guardAnalysis.score()).isEqualTo(35.98);
+        assertThat(guardAnalysis.projectedPoints()).isEqualTo(30.0);
+        assertThat(guardAnalysis.lockIn().games()).hasSize(2);
+        assertThat(guardAnalysis.lockIn().thresholds()).containsExactly(30.0, 0.0);
+        assertThat(response.recommendation().playerId()).isEqualTo("C");
+        assertThat(response.recommendation().confidence()).isEqualTo(Confidence.LEAN);
+        assertThat(response.reasons()).contains(
+                "Center has 1 game left to Guard's 2. Only one game counts, so the week is worth 40.0 to 36.0.",
+                "Center projects 40.0 points a game to Guard's 30.0 in your league's scoring.");
+    }
+
     private void givenPlayers(PlayerSummary a, PlayerSummary b) {
         lenient().when(playerService.findSummary(Sport.NFL, "A")).thenReturn(Optional.of(a));
         lenient().when(playerService.findSummary(Sport.NFL, "B")).thenReturn(Optional.of(b));
@@ -230,6 +274,11 @@ class StartSitServiceTest {
 
     private static SleeperWeeklyEntry rushing(String id, String team, String opponent, int week, double yards) {
         return new SleeperWeeklyEntry(id, team, opponent, week, Map.of("gp", 1, "rush_yd", yards));
+    }
+
+    private static SleeperWeeklyEntry perGame(String id, String gameId, String date, String opponent,
+            double points) {
+        return new SleeperWeeklyEntry(id, null, opponent, 3, Map.of("gp", 1.0, "pts", points), date, gameId);
     }
 
     private static SleeperWeeklyEntry defense(String team, int week, double allowedToRbs) {

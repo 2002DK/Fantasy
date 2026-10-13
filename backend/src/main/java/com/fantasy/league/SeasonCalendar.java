@@ -36,6 +36,10 @@ public class SeasonCalendar {
             throw new InvalidRequestException(
                     "This league is from the " + league.season() + " season; this only works for the current season");
         }
+        // Basketball's preseason counts its own weeks (week 3 days before opening night); fantasy week 1 is next
+        if (sport == Sport.NBA && "pre".equals(state.seasonType())) {
+            return 1;
+        }
         return Math.clamp(state.week(), 1, sport == Sport.NBA ? LAST_NBA_WEEK : LAST_NFL_WEEK);
     }
 

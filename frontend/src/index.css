@@ -740,15 +740,20 @@ select {
 .pos-G { background: #364fc7; }
 .pos-F { background: #5c636a; }
 
-.coming-soon {
-  margin-top: 16px;
-  border-color: var(--accent);
-  background: var(--accent-soft);
+/* Basketball: Lock-In game list in the start/sit comparison */
+
+.lock-in-games {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
 }
 
-.coming-soon p {
-  margin: 0;
-  font-size: 0.875rem;
+.lock-in-games li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
 }
 
 .pos-empty {

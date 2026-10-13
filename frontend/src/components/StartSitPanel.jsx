@@ -27,9 +27,38 @@ function matchupLabel(matchup) {
   return `${where} ${matchup.opponent} · ${standing}`
 }
 
+const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'UTC' })
+
+/** "Tue" for a game date like 2026-11-03 (the date Sleeper lists, so no time zone shift). */
+function weekday(date) {
+  return date ? WEEKDAY.format(new Date(`${date}T00:00:00Z`)) : ''
+}
+
+/** Basketball: each game left this week, and the score worth locking after it. */
+function LockInGames({ lockIn }) {
+  if (lockIn.games.length === 0) return null
+  const last = lockIn.games.length - 1
+  return (
+    <ul className="lock-in-games" aria-label="Games left this week">
+      {lockIn.games.map((game, i) => (
+        <li key={game.gameId ?? i}>
+          <span>
+            {weekday(game.date)} {game.home ? 'vs' : '@'} {game.opponent}
+            <span className="muted"> · {formatPoints(game.expectedPoints)}</span>
+          </span>
+          <span className="muted">
+            {i === last ? 'counts if nothing locked' : `lock ${formatPoints(lockIn.thresholds[i])}+`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function PlayerColumn({ analysis, recommended }) {
-  const { player, available, availabilityNote, projectedPoints, recentAverage, recentGames, matchup, score } =
+  const { player, available, availabilityNote, projectedPoints, recentAverage, recentGames, matchup, score, lockIn } =
     analysis
+  const basketball = lockIn != null
   return (
     <div className={`comparison-player${recommended ? ' recommended' : ''}`}>
       <div className="comparison-name">
@@ -45,7 +74,7 @@ function PlayerColumn({ analysis, recommended }) {
       {!available && <p className="unavailable">Can't start: {availabilityNote}</p>}
       <dl className="comparison-stats">
         <div>
-          <dt>Projected</dt>
+          <dt>{basketball ? 'Projected/game' : 'Projected'}</dt>
           <dd>{formatPoints(projectedPoints)}</dd>
         </div>
         <div>
@@ -60,14 +89,15 @@ function PlayerColumn({ analysis, recommended }) {
           </dd>
         </div>
         <div className="wide">
-          <dt>Matchup</dt>
+          <dt>{basketball ? 'Next game' : 'Matchup'}</dt>
           <dd>{matchup ? matchupLabel(matchup) : '–'}</dd>
         </div>
         <div>
-          <dt>Score</dt>
+          <dt>{basketball ? 'Lock-In value' : 'Score'}</dt>
           <dd className="score">{formatPoints(score)}</dd>
         </div>
       </dl>
+      {basketball && <LockInGames lockIn={lockIn} />}
     </div>
   )
 }
@@ -89,6 +119,7 @@ export default function StartSitPanel({ leagueId, playerIds, onClear }) {
   if (!comparison.data) return null
 
   const { week, recommendation, players, reasons, notes } = comparison.data
+  const basketball = players.some((p) => p.lockIn != null)
   const pick = recommendation && players.find((p) => p.player.playerId === recommendation.playerId)
 
   return (
@@ -129,24 +160,50 @@ export default function StartSitPanel({ leagueId, playerIds, onClear }) {
           ))}
         </ul>
       )}
-      <HowItWorks>
-        <p>Each player's score blends:</p>
-        <ul>
-          <li>
-            <strong>60% projected points</strong> for this week, from Sleeper's projections, scored with your league's
-            settings.
-          </li>
-          <li>
-            <strong>40% recent form</strong>: the average of their last 3 games, raised or lowered by up to 15% for how
-            many points this week's opponent allows to their position. Projections already account for the opponent,
-            so the matchup only adjusts form.
-          </li>
-        </ul>
-        <p>
-          Players who are Out, on IR or on bye can't start. Questionable players lose 10% and Doubtful players 50%.
-          Scores within 5% are a toss-up and within 15% a lean.
-        </p>
-      </HowItWorks>
+      {basketball ? (
+        <HowItWorks>
+          <p>
+            In Lock-In, one game per starter counts each week: after a game you lock its score or wait for the next,
+            and the last game counts if you never lock. So more games help, but far less than adding their points.
+          </p>
+          <p>Each game's expected score blends:</p>
+          <ul>
+            <li>
+              <strong>60% projected points</strong> for that game, from Sleeper's projections, scored with your
+              league's settings.
+            </li>
+            <li>
+              <strong>40% recent form</strong>: the average of their last 5 games, raised or lowered by up to 15% for
+              how many points that opponent allows to their position.
+            </li>
+          </ul>
+          <p>
+            The <strong>Lock-In value</strong> is the expected counted score with the best lock-or-pass choices over the
+            games left. After each game, lock in a score at or above the threshold shown, and wait otherwise. Players
+            who are Out miss their next game; day-to-day and game-time decisions lose 10% of it. Values within 5% are
+            a toss-up and within 15% a lean.
+          </p>
+        </HowItWorks>
+      ) : (
+        <HowItWorks>
+          <p>Each player's score blends:</p>
+          <ul>
+            <li>
+              <strong>60% projected points</strong> for this week, from Sleeper's projections, scored with your league's
+              settings.
+            </li>
+            <li>
+              <strong>40% recent form</strong>: the average of their last 3 games, raised or lowered by up to 15% for how
+              many points this week's opponent allows to their position. Projections already account for the opponent,
+              so the matchup only adjusts form.
+            </li>
+          </ul>
+          <p>
+            Players who are Out, on IR or on bye can't start. Questionable players lose 10% and Doubtful players 50%.
+            Scores within 5% are a toss-up and within 15% a lean.
+          </p>
+        </HowItWorks>
+      )}
     </section>
   )
 }

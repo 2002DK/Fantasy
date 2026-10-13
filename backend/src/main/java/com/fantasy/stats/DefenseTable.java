@@ -2,17 +2,20 @@ package com.fantasy.stats;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.fantasy.sleeper.SleeperWeeklyEntry;
 
 /**
- * How many fantasy points each NFL defense has allowed per game to each position,
- * averaged over completed weeks. Built from the fan_pts_allow_&lt;pos&gt; stats on team
- * defense rows. Only relative standing is used, so the scoring system Sleeper uses
- * for these totals does not matter.
+ * How many fantasy points each team's defense has allowed per game to each position.
+ * Football uses the fan_pts_allow_&lt;pos&gt; stats on team defense rows (only relative
+ * standing is used, so Sleeper's scoring for those totals does not matter).
+ * Basketball has no such stat, so its table totals each player's points in the
+ * league's scoring against their opponent, game by game.
  */
 public final class DefenseTable {
 
@@ -50,6 +53,35 @@ public final class DefenseTable {
         totals.forEach((position, byTeam) -> {
             Map<String, Double> teamAverages = new HashMap<>();
             byTeam.forEach((team, sumAndGames) -> teamAverages.put(team, sumAndGames[0] / sumAndGames[1]));
+            averages.put(position, teamAverages);
+        });
+        return new DefenseTable(averages);
+    }
+
+    /**
+     * Basketball: points allowed per game to each primary position, from box scores.
+     *
+     * @param positions player ID -> primary position; players without one are skipped
+     */
+    public static DefenseTable fromBoxScores(List<SleeperWeeklyEntry> games, Map<String, String> positions,
+            Map<String, Double> scoring) {
+        // position -> team -> points allowed; team -> games played
+        Map<String, Map<String, Double>> allowed = new HashMap<>();
+        Map<String, Set<String>> gamesByTeam = new HashMap<>();
+        for (SleeperWeeklyEntry entry : games) {
+            String position = positions.get(entry.playerId());
+            if (!entry.played() || entry.opponent() == null || position == null) {
+                continue;
+            }
+            String game = entry.gameId() != null ? entry.gameId() : entry.date() + "/" + entry.team();
+            gamesByTeam.computeIfAbsent(entry.opponent(), t -> new HashSet<>()).add(game);
+            allowed.computeIfAbsent(position.toLowerCase(), p -> new HashMap<>())
+                    .merge(entry.opponent(), ScoringCalculator.points(entry, scoring), Double::sum);
+        }
+        Map<String, Map<String, Double>> averages = new HashMap<>();
+        allowed.forEach((position, byTeam) -> {
+            Map<String, Double> teamAverages = new HashMap<>();
+            byTeam.forEach((team, points) -> teamAverages.put(team, points / gamesByTeam.get(team).size()));
             averages.put(position, teamAverages);
         });
         return new DefenseTable(averages);

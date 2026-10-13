@@ -9,15 +9,16 @@ import org.springframework.stereotype.Service;
 
 import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
-import com.fantasy.league.SportSupport;
 import com.fantasy.lineup.LineupResponse;
 import com.fantasy.lineup.LineupService;
 import com.fantasy.lineup.LineupSolver;
+import com.fantasy.lockin.LockInScorer;
 import com.fantasy.matchup.MatchupResponse.Side;
 import com.fantasy.matchup.MatchupResponse.Starter;
 import com.fantasy.player.PlayerSummary;
 import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperMatchup;
+import com.fantasy.sleeper.Sport;
 import com.fantasy.startsit.StartSitResponse.PlayerAnalysis;
 import com.fantasy.startsit.WeeklyScorer;
 import com.fantasy.stats.ScoreDistribution;
@@ -27,6 +28,7 @@ import com.fantasy.stats.ScoringCalculator;
  * Previews this week's head-to-head. Each starter contributes their actual points
  * once their game is final, at least their live points while it is in progress, and
  * their expected points before it starts; uncertainty shrinks as games finish.
+ * Basketball counts one game per starter under Lock-In.
  */
 @Service
 public class MatchupService {
@@ -39,24 +41,27 @@ public class MatchupService {
     private final WeeklyScorer scorer;
     private final SleeperClient sleeperClient;
     private final LineupService lineupService;
+    private final LockInScorer lockInScorer;
 
     public MatchupService(LeagueData leagueData, SeasonCalendar calendar, WeeklyScorer scorer,
-            SleeperClient sleeperClient, LineupService lineupService) {
+            SleeperClient sleeperClient, LineupService lineupService, LockInScorer lockInScorer) {
         this.leagueData = leagueData;
         this.calendar = calendar;
         this.scorer = scorer;
         this.sleeperClient = sleeperClient;
         this.lineupService = lineupService;
+        this.lockInScorer = lockInScorer;
     }
 
     public MatchupResponse preview(String leagueId, String userId) {
         LeagueData.Snapshot snapshot = leagueData.load(leagueId);
-        SportSupport.requireFootball(snapshot.league(), "The matchup preview");
         LeagueData.Team me = snapshot.teamOf(userId);
         int week = calendar.currentWeek(snapshot.league());
         List<SleeperMatchup> matchups = sleeperClient.getMatchups(leagueId, week);
-        WeeklyScorer.Week data = scorer.load(snapshot.league(), week);
-        List<String> notes = new ArrayList<>(data.notes());
+        boolean basketball = snapshot.league().sportType() == Sport.NBA;
+        WeeklyScorer.Week data = basketball ? null : scorer.load(snapshot.league(), week);
+        LockInScorer.Week lockInData = basketball ? lockInScorer.load(snapshot.league(), week) : null;
+        List<String> notes = new ArrayList<>(basketball ? lockInData.notes() : data.notes());
 
         SleeperMatchup mine = matchups.stream().filter(m -> m.rosterId() == me.rosterId()).findFirst().orElse(null);
         SleeperMatchup theirs = mine == null || mine.matchupId() == null ? null : matchups.stream()
@@ -65,13 +70,16 @@ public class MatchupService {
 
         List<String> slots = LineupSolver.startingSlots(snapshot.rosterPositions());
         double[] myVariance = new double[1];
-        Side you = side(me, mine, slots, snapshot, data, myVariance);
+        Side you = basketball ? basketballSide(me, mine, slots, lockInData, myVariance)
+                : side(me, mine, slots, snapshot, data, myVariance);
         if (theirs == null) {
             notes.add(0, "You don't have an opponent in week %d.".formatted(week));
             return new MatchupResponse(week, you, null, null, null, null, notes);
         }
         double[] theirVariance = new double[1];
-        Side opponent = side(snapshot.team(theirs.rosterId()), theirs, slots, snapshot, data, theirVariance);
+        LeagueData.Team them = snapshot.team(theirs.rosterId());
+        Side opponent = basketball ? basketballSide(them, theirs, slots, lockInData, theirVariance)
+                : side(them, theirs, slots, snapshot, data, theirVariance);
         double winProbability = ScoreDistribution.winProbability(
                 you.projectedPoints(), myVariance[0], opponent.projectedPoints(), theirVariance[0]);
 
@@ -85,6 +93,11 @@ public class MatchupService {
                     optimizedPoints, myVariance[0], opponent.projectedPoints(), theirVariance[0]));
         }
 
+        if (basketball) {
+            notes.add("Each starter counts one game: a score they can still lock, or the Lock-In value of "
+                    + "their remaining games. The app can't see which scores you've locked yet, so a starter's "
+                    + "latest score is treated as one you could still lock.");
+        }
         if (snapshot.league().settings() != null && snapshot.league().settings().playsMedian()) {
             notes.add("This league also plays the weekly league median, which isn't included in this win probability.");
         }
@@ -131,6 +144,56 @@ public class MatchupService {
             String opponentLabel = opponent == null ? null : (opponent.home() ? "vs " : "@ ") + opponent.team();
             starters.add(new Starter(slots.get(i), player, ScoringCalculator.round(expected),
                     ScoringCalculator.round(actual), ScoringCalculator.round(projected), status, opponentLabel));
+        }
+        return new Side(team.rosterId(), team.name(), team.owner().displayName(), team.owner().avatarUrl(),
+                ScoringCalculator.round(actualTotal), ScoringCalculator.round(projectedTotal), starters);
+    }
+
+    /**
+     * Basketball: a starter with no games left counts their score as final. Otherwise
+     * they count the better of their current score (which they can lock before their
+     * next game) and the Lock-In value of the games left; the spread narrows when the
+     * current score is worth keeping. Writes the side's variance into {@code variance[0]}.
+     */
+    private Side basketballSide(LeagueData.Team team, SleeperMatchup matchup, List<String> slots,
+            LockInScorer.Week data, double[] variance) {
+        List<String> starterIds = matchup != null && matchup.starters() != null ? matchup.starters()
+                : team.roster().starters() != null ? team.roster().starters() : List.of();
+        Map<String, Double> livePoints = matchup != null && matchup.playersPoints() != null ? matchup.playersPoints()
+                : Map.of();
+
+        List<Starter> starters = new ArrayList<>();
+        double actualTotal = 0;
+        double projectedTotal = 0;
+        for (int i = 0; i < slots.size(); i++) {
+            String id = i < starterIds.size() ? starterIds.get(i) : null;
+            PlayerSummary player = id == null ? null
+                    : team.players().stream().filter(p -> p.playerId().equals(id)).findFirst().orElse(null);
+            if (player == null) {
+                starters.add(new Starter(slots.get(i), null, 0, 0, 0, "empty", null, 0));
+                continue;
+            }
+            LockInScorer.Analysis analysis = lockInScorer.analyze(player, data);
+            double actual = livePoints.getOrDefault(id, 0.0);
+            int gamesLeft = analysis.games().size();
+            double projected;
+            String status;
+            if (gamesLeft == 0) {
+                projected = actual;
+                status = actual == 0 && data.gamesOf(player).isEmpty() ? "bye" : "final";
+            } else {
+                boolean keep = actual > 0 && actual >= analysis.value();
+                projected = Math.max(actual, analysis.value());
+                variance[0] += keep ? 0 : analysis.outcome().variance();
+                status = data.isPlaying(player) ? "live" : "upcoming";
+            }
+            actualTotal += actual;
+            projectedTotal += projected;
+            LockInScorer.GameOutlook next = analysis.games().isEmpty() ? null : analysis.games().getFirst();
+            String opponentLabel = next == null ? null : (next.home() ? "vs " : "@ ") + next.opponent();
+            starters.add(new Starter(slots.get(i), player, ScoringCalculator.round(projected),
+                    ScoringCalculator.round(actual), ScoringCalculator.round(projected), status, opponentLabel,
+                    gamesLeft));
         }
         return new Side(team.rosterId(), team.name(), team.owner().displayName(), team.owner().avatarUrl(),
                 ScoringCalculator.round(actualTotal), ScoringCalculator.round(projectedTotal), starters);

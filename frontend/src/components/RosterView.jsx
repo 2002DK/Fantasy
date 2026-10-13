@@ -37,14 +37,16 @@ function SelectableRow({ player, selected, onToggle, children }) {
       >
         {children}
       </button>
-      <button
-        type="button"
-        className="info-button"
-        aria-label={`Details for ${player.name ?? 'player'}`}
-        onClick={() => openPlayer(player.playerId)}
-      >
-        i
-      </button>
+      {openPlayer && (
+        <button
+          type="button"
+          className="info-button"
+          aria-label={`Details for ${player.name ?? 'player'}`}
+          onClick={() => openPlayer(player.playerId)}
+        >
+          i
+        </button>
+      )}
     </li>
   )
 }
@@ -76,6 +78,9 @@ const TOOLS = [
   { id: 'planner', label: 'Planner' },
 ]
 
+/** Basketball has these tools so far; the rest are being adapted for Lock-In scoring. */
+const BASKETBALL_TOOLS = new Set(['lineup', 'matchup'])
+
 /** Older links used ?tool=start-sit, which is now part of the Lineup tab. */
 const TOOL_ALIASES = { 'start-sit': 'lineup' }
 
@@ -83,7 +88,7 @@ const TOOL_ALIASES = { 'start-sit': 'lineup' }
  * WAI-ARIA tabs: only the active tab is in the Tab order; arrow keys, Home and End
  * move between tabs and activate them.
  */
-function ToolTabs({ activeTool, onToolChange }) {
+function ToolTabs({ tools, activeTool, onToolChange }) {
   const tabRefs = useRef({})
 
   // On narrow screens the tab strip scrolls sideways; keep the active tab visible
@@ -92,23 +97,23 @@ function ToolTabs({ activeTool, onToolChange }) {
   }, [activeTool])
 
   function handleKeyDown(event) {
-    const index = TOOLS.findIndex((t) => t.id === activeTool)
+    const index = tools.findIndex((t) => t.id === activeTool)
     const nextIndex = {
-      ArrowRight: (index + 1) % TOOLS.length,
-      ArrowLeft: (index - 1 + TOOLS.length) % TOOLS.length,
+      ArrowRight: (index + 1) % tools.length,
+      ArrowLeft: (index - 1 + tools.length) % tools.length,
       Home: 0,
-      End: TOOLS.length - 1,
+      End: tools.length - 1,
     }[event.key]
     if (nextIndex === undefined) return
     event.preventDefault()
-    const next = TOOLS[nextIndex].id
+    const next = tools[nextIndex].id
     onToolChange(next)
     tabRefs.current[next]?.focus()
   }
 
   return (
     <div className="tabs" role="tablist" aria-label="Tools" onKeyDown={handleKeyDown}>
-      {TOOLS.map((t) => (
+      {tools.map((t) => (
         <button
           key={t.id}
           ref={(el) => (tabRefs.current[t.id] = el)}
@@ -125,69 +130,6 @@ function ToolTabs({ activeTool, onToolChange }) {
         </button>
       ))}
     </div>
-  )
-}
-
-function ReadOnlySection({ title, players }) {
-  if (players.length === 0) return null
-  return (
-    <section className="card roster-section">
-      <h3>
-        {title} <span className="muted count">{players.length}</span>
-      </h3>
-      <ul className="player-list">
-        {players.map((player) => (
-          <li key={player.playerId} className="player-row">
-            <PositionChip position={player.position} />
-            <PlayerCells player={player} />
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-/**
- * Basketball rosters are read-only for now: the tools are being adapted to Lock-In
- * scoring, where one game per starter counts each week.
- */
-function BasketballRoster({ data }) {
-  return (
-    <>
-      <div className="card coming-soon" role="note">
-        <h3>Basketball tools are on the way</h3>
-        <p className="muted">
-          Lineup, Start/Sit, Matchup, Trade, League and Planner are being adapted for Lock-In scoring, where one game per
-          starter counts each week. Your roster is below in the meantime.
-        </p>
-      </div>
-      <section className="card roster-section">
-        <h3>Starters</h3>
-        <ul className="player-list">
-          {data.starters.map((starter, i) => (
-            <li key={i} className="player-row">
-              <span className="slot">{starter.slot.replace('_', ' ')}</span>
-              {starter.player ? (
-                <>
-                  <PositionChip position={starter.player.position} />
-                  <PlayerCells player={starter.player} />
-                </>
-              ) : (
-                <>
-                  <span className="pos pos-empty" aria-hidden="true">
-                    –
-                  </span>
-                  <span className="player-name muted">Empty</span>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <ReadOnlySection title="Bench" players={data.bench} />
-      <ReadOnlySection title="Injured reserve" players={data.reserve} />
-      <ReadOnlySection title="Taxi squad" players={data.taxi} />
-    </>
   )
 }
 
@@ -261,14 +203,16 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
   }
   if (!data) return null
 
+  const basketball = data.sport === 'nba'
+  const tools = basketball ? TOOLS.filter((t) => BASKETBALL_TOOLS.has(t.id)) : TOOLS
   const requestedTool = TOOL_ALIASES[tool] ?? tool
-  const activeTool = TOOLS.some((t) => t.id === requestedTool) ? requestedTool : 'lineup'
+  const activeTool = tools.some((t) => t.id === requestedTool) ? requestedTool : 'lineup'
   const { owner, record } = data
   const hasPlayers = data.starters.some((s) => s.player) || data.bench.length > 0 || data.reserve.length > 0
   const recordText = record.ties > 0 ? `${record.wins}–${record.losses}–${record.ties}` : `${record.wins}–${record.losses}`
 
   return (
-    <PlayerDialogProvider leagueId={data.leagueId} userId={userId}>
+    <PlayerDialogProvider leagueId={data.leagueId} userId={userId} enabled={!basketball}>
     <section>
       {backButton}
       <div className="card team-header">
@@ -299,11 +243,14 @@ export default function RosterView({ roster, userId, tool, onToolChange, onBack 
 
       {!hasPlayers ? (
         <p className="status">No players on this roster yet. The league may not have drafted.</p>
-      ) : data.sport === 'nba' ? (
-        <BasketballRoster data={data} />
       ) : (
         <>
-          <ToolTabs activeTool={activeTool} onToolChange={onToolChange} />
+          {basketball && (
+            <p className="hint muted">
+              Trade, League, Planner and player details for basketball are on the way.
+            </p>
+          )}
+          <ToolTabs tools={tools} activeTool={activeTool} onToolChange={onToolChange} />
           <div role="tabpanel" id={`panel-${activeTool}`} aria-labelledby={`tab-${activeTool}`}>
             {activeTool === 'lineup' && (
               <>

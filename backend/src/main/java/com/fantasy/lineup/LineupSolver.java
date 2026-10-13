@@ -14,6 +14,8 @@ import com.fantasy.player.PlayerSummary;
 
 /**
  * Picks the starting lineup with the most expected points for a set of roster slots.
+ * Players fill any slot that accepts one of their eligible positions, so a PG/SG
+ * basketball player can start at PG, SG, G or UTIL.
  *
  * <p>Dedicated slots (QB, RB...) are filled before flex slots, each with the best
  * eligible player left; that is optimal whenever flex slots nest (FLEX within
@@ -29,8 +31,12 @@ public final class LineupSolver {
             "FLEX", Set.of("RB", "WR", "TE"),
             "WRRB_FLEX", Set.of("RB", "WR"),
             "REC_FLEX", Set.of("WR", "TE"),
-            "SUPER_FLEX", Set.of("QB", "RB", "WR", "TE"));
-    private static final Set<String> SCORED_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "DEF");
+            "SUPER_FLEX", Set.of("QB", "RB", "WR", "TE"),
+            "G", Set.of("PG", "SG"),
+            "F", Set.of("SF", "PF"),
+            "UTIL", Set.of("PG", "SG", "SF", "PF", "C"));
+    private static final Set<String> SCORED_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "DEF",
+            "PG", "SG", "SF", "PF", "C");
 
     /** A rostered player with expected points; locked players cannot change slots. */
     public record Candidate(PlayerSummary player, double points, boolean locked) {
@@ -96,7 +102,7 @@ public final class LineupSolver {
                 .toList();
         for (int i : open) {
             Set<String> eligible = eligiblePositions(slots.get(i));
-            Candidate best = free.stream().filter(c -> eligible.contains(c.player().position())).findFirst().orElse(null);
+            Candidate best = free.stream().filter(c -> c.player().fitsAny(eligible)).findFirst().orElse(null);
             if (best != null) {
                 lineup[i] = best;
                 free.remove(best);
@@ -104,8 +110,43 @@ public final class LineupSolver {
         }
 
         improve(slots, lineup, open, free);
+        keepCurrentSlots(slots, lineup, open, currentStarters);
         // Arrays.asList keeps null entries for slots nobody can fill (List.of would reject them)
         return Arrays.asList(lineup);
+    }
+
+    /**
+     * Moves starters who stay in the lineup back to the slot they are in now, swapping
+     * with whoever took it when both fit, so the suggested lineup changes only the slots
+     * it must. Each swap settles one player in their current slot, so this terminates;
+     * the total is unchanged.
+     */
+    private static void keepCurrentSlots(List<String> slots, Candidate[] lineup, List<Integer> open,
+            List<String> currentStarters) {
+        boolean moved = true;
+        while (moved) {
+            moved = false;
+            for (int i : open) {
+                String currentId = i < currentStarters.size() ? currentStarters.get(i) : null;
+                if (currentId == null || (lineup[i] != null && lineup[i].id().equals(currentId))) {
+                    continue;
+                }
+                for (int j : open) {
+                    if (lineup[j] == null || !lineup[j].id().equals(currentId)) {
+                        continue;
+                    }
+                    Candidate other = lineup[i];
+                    boolean fits = lineup[j].player().fitsAny(eligiblePositions(slots.get(i)))
+                            && (other == null || other.player().fitsAny(eligiblePositions(slots.get(j))));
+                    if (fits) {
+                        lineup[i] = lineup[j];
+                        lineup[j] = other;
+                        moved = true;
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     /** Swaps that raise the total: bench-for-starter, or a starter moving slots to make room for a bench player. */
@@ -117,7 +158,7 @@ public final class LineupSolver {
             for (int i : open) {
                 Set<String> eligibleI = eligiblePositions(slots.get(i));
                 for (Candidate b : List.copyOf(bench)) {
-                    if (!eligibleI.contains(b.player().position())) {
+                    if (!b.player().fitsAny(eligibleI)) {
                         continue;
                     }
                     // Direct replacement
@@ -132,7 +173,7 @@ public final class LineupSolver {
                             continue;
                         }
                         Candidate displaced = lineup[j];
-                        boolean fits = eligiblePositions(slots.get(j)).contains(lineup[i].player().position());
+                        boolean fits = lineup[i].player().fitsAny(eligiblePositions(slots.get(j)));
                         double gain = b.points() - (displaced != null ? displaced.points() : 0);
                         if (fits && gain > 1e-9) {
                             lineup[j] = lineup[i];

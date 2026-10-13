@@ -198,7 +198,7 @@ public class TradeService {
     }
 
     private static String fmt(double points) {
-        return "%.1f".formatted(points);
+        return ScoringCalculator.oneDecimal(points);
     }
 
     private static String games(int count) {

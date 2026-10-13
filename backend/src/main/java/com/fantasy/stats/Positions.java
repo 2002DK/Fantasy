@@ -4,9 +4,11 @@ import java.util.Map;
 
 public final class Positions {
 
-    private static final Map<String, String> PLURAL_NAMES = Map.of(
-            "QB", "quarterbacks", "RB", "running backs", "WR", "receivers",
-            "TE", "tight ends", "K", "kickers", "DEF", "defenses");
+    private static final Map<String, String> PLURAL_NAMES = Map.ofEntries(
+            Map.entry("QB", "quarterbacks"), Map.entry("RB", "running backs"), Map.entry("WR", "receivers"),
+            Map.entry("TE", "tight ends"), Map.entry("K", "kickers"), Map.entry("DEF", "defenses"),
+            Map.entry("PG", "point guards"), Map.entry("SG", "shooting guards"), Map.entry("SF", "small forwards"),
+            Map.entry("PF", "power forwards"), Map.entry("C", "centers"));
 
     private Positions() {
     }

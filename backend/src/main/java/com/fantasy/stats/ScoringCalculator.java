@@ -1,5 +1,7 @@
 package com.fantasy.stats;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 
 import com.fantasy.sleeper.SleeperWeeklyEntry;
@@ -25,5 +27,13 @@ public final class ScoringCalculator {
 
     public static double round(double value) {
         return Math.round(value * 100) / 100.0;
+    }
+
+    /**
+     * One decimal, rounding half up from the number as written (47.05 -> "47.1"), as the
+     * frontend does, so explanations match the points shown beside them.
+     */
+    public static String oneDecimal(double value) {
+        return BigDecimal.valueOf(value).setScale(1, RoundingMode.HALF_UP).toPlainString();
     }
 }
