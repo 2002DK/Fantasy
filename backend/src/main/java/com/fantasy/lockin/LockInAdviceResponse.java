@@ -30,11 +30,12 @@ public record LockInAdviceResponse(int week, List<StarterAdvice> starters, List<
     /**
      * {@code waitValue} is the Lock-In value of the games still to come (null without
      * any). {@code canLock} is true when there is a finished game this week to mark as
-     * locked.
+     * locked; {@code canUnmark} when the lock is one the user marked (a lock read from
+     * Sleeper's score can't be unmarked).
      */
     public record StarterAdvice(String slot, PlayerSummary player, Action action, String message,
             PlayedGame latestGame, Double waitValue, List<UpcomingGame> upcoming, PlayedGame lockedGame,
-            boolean canLock) {
+            boolean canLock, boolean canUnmark) {
     }
 
     public record PlayedGame(String gameId, String date, String opponent, double points) {

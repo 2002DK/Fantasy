@@ -16,6 +16,7 @@ import com.fantasy.league.LeagueData;
 import com.fantasy.league.SeasonCalendar;
 import com.fantasy.lineup.LineupResponse.LineupPlayer;
 import com.fantasy.lineup.LineupSolver.Candidate;
+import com.fantasy.lockin.LockInAdviceResponse.PlayedGame;
 import com.fantasy.lockin.LockInMark;
 import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInScorer;
@@ -135,17 +136,21 @@ public class LineupService {
             double score = counted.getOrDefault(player.playerId(), 0.0);
             boolean starter = starterIds.contains(player.playerId());
             boolean hasScore = starter && score > 0 && data.gamesPlayed(player) > 0;
-            LockInMark mark = starter ? marked.get(player.playerId()) : null;
-            double value = mark != null ? mark.getPoints()
+            LockInMark manual = starter ? marked.get(player.playerId()) : null;
+            PlayedGame inferred = starter && manual == null ? data.inferredLock(player.playerId(), score) : null;
+            Double lockedPoints = manual != null ? Double.valueOf(manual.getPoints())
+                    : inferred != null ? Double.valueOf(inferred.points()) : null;
+            double value = lockedPoints != null ? lockedPoints
                     : hasScore ? Math.max(score, analysis.value()) : analysis.value();
-            boolean locked = mark != null || hasScore || data.isPlaying(player);
-            String label = mark != null ? "Locked in at " + fmt(mark.getPoints())
+            boolean locked = lockedPoints != null || hasScore || data.isPlaying(player);
+            String label = lockedPoints != null ? "Locked in at " + fmt(lockedPoints)
                     : gamesLabel(analysis.games().size(), hasScore ? score : null);
-            anyScored |= hasScore || mark != null;
+            anyScored |= hasScore || lockedPoints != null;
             anyPlaying |= data.isPlaying(player);
             benchPlayed |= !starter && data.gamesPlayed(player) > 0;
             LineupPlayer lineupPlayer = new LineupPlayer(player, ScoringCalculator.round(value),
-                    analysis.available() || hasScore || mark != null, analysis.availabilityNote(), label, locked);
+                    analysis.available() || hasScore || lockedPoints != null, analysis.availabilityNote(), label,
+                    locked);
             byId.put(player.playerId(), lineupPlayer);
             if (!unavailableForLineup.contains(player.playerId())) {
                 candidates.add(new Candidate(player, lineupPlayer.expectedPoints(), locked));

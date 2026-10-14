@@ -20,7 +20,7 @@ function gameLabel(game) {
 }
 
 function StarterCard({ advice, pending, onToggle }) {
-  const { slot, player, action, message, upcoming, lockedGame, canLock } = advice
+  const { slot, player, action, message, upcoming, lockedGame, canLock, canUnmark } = advice
   const last = upcoming.length - 1
   return (
     <li className={`card lock-advice action-${action}`}>
@@ -54,15 +54,15 @@ function StarterCard({ advice, pending, onToggle }) {
           ))}
         </ul>
       )}
-      {(canLock || action === 'LOCKED') && (
+      {(canLock || canUnmark) && (
         <button
           type="button"
           // Only a "lock it in" call gets the primary button; elsewhere marking a lock goes against the advice
           className={action === 'LOCK' ? undefined : 'secondary'}
           disabled={pending}
-          onClick={() => onToggle(player.playerId, action !== 'LOCKED')}
+          onClick={() => onToggle(player.playerId, !canUnmark)}
         >
-          {pending ? 'Saving…' : action === 'LOCKED' ? 'Unmark lock' : 'I locked this score'}
+          {pending ? 'Saving…' : canUnmark ? 'Unmark lock' : 'I locked this score'}
         </button>
       )}
     </li>
@@ -142,8 +142,10 @@ export default function LockInAdvisor({ leagueId, userId }) {
           shrinks as games run out, which is why the score to beat drops through the week.
         </p>
         <p>
-          Sleeper doesn't share which scores you've locked, so tap <strong>I locked this score</strong> after locking
-          in Sleeper. Marked scores count as final in your lineup and matchup.
+          When Sleeper counts an earlier game than a player's latest, that score must be locked, so it shows as locked
+          here automatically. Sleeper can't tell a locked latest score from one that counts by default, so after
+          locking a player's most recent game in Sleeper, tap <strong>I locked this score</strong>. Locked scores
+          count as final in your lineup and matchup.
         </p>
       </HowItWorks>
     </section>

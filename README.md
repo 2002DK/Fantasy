@@ -70,6 +70,12 @@ cd backend && ./mvnw test
    - `DATABASE_USERNAME` and `DATABASE_PASSWORD`
 3. Render builds the [`Dockerfile`](Dockerfile) and deploys. Pushes to `main` redeploy automatically.
 
+To check a deployment, call every endpoint for one league:
+
+```bash
+scripts/smoke-test.sh https://fantasy-app-p6xn.onrender.com <sleeper-username> <league-id>
+```
+
 On first start, Flyway creates the tables and the app downloads Sleeper's player list. Render's free
 plan sleeps after 15 minutes without traffic; the first request afterwards takes about a minute.
 

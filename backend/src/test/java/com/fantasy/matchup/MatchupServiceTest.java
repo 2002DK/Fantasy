@@ -21,6 +21,7 @@ import com.fantasy.league.RosterResponse;
 import com.fantasy.league.SeasonCalendar;
 import com.fantasy.lineup.LineupResponse;
 import com.fantasy.lineup.LineupService;
+import com.fantasy.lockin.LockInAdviceResponse;
 import com.fantasy.lockin.LockInMark;
 import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInModel;
@@ -139,6 +140,22 @@ class MatchupServiceTest {
         assertThat(response.you().starters().getFirst().expectedPoints()).isEqualTo(44.0);
     }
 
+    @Test
+    void basketballOpponentsLockIsReadFromSleepersScore() {
+        // Their C counts 20, which matches his earlier game (latest was 8), so the 20 is locked and final
+        opponentGames = Map.of("d", List.of(new LockInAdviceResponse.PlayedGame("e1", "2026-11-02", "LAL", 20),
+                new LockInAdviceResponse.PlayedGame("e2", "2026-11-03", "LAL", 8)));
+
+        MatchupResponse response = basketballPreview();
+
+        assertThat(response.opponent().starters().get(1).status()).isEqualTo("locked");
+        assertThat(response.opponent().projectedPoints()).isEqualTo(65.0); // 45 + 20
+        assertThat(response.winProbability()).isCloseTo(100 * ScoreDistribution.winProbability(80, 0, 65, 100),
+                within(0.01));
+    }
+
+    private Map<String, List<LockInAdviceResponse.PlayedGame>> opponentGames = Map.of();
+
     private MatchupResponse basketballPreview() {
         SleeperLeague league = new SleeperLeague("L2", "Hoops", "2026", "in_season", 2, null,
                 List.of("PG", "C", "BN"), Map.of(), null, "nba");
@@ -152,7 +169,7 @@ class MatchupServiceTest {
         LockInScorer.ScheduledGame played = new LockInScorer.ScheduledGame("g0", null, "LAL", true, "complete");
         given(lockInScorer.load(any(), anyInt())).willReturn(new LockInScorer.Week("2026", 3, Map.of(),
                 Map.of("DAL", List.of(played), "BOS", List.of(played), "MIA", List.of(played), "NYK", List.of(played)),
-                Map.of(), Map.of(), DefenseTable.from(List.of()), new ArrayList<>()));
+                Map.of(), Map.of(), DefenseTable.from(List.of()), new ArrayList<>(), opponentGames));
         Map<String, double[]> outlook = Map.of( // games left, value, variance
                 "a", new double[] {2, 40, 81}, "b", new double[] {0, 0, 0},
                 "c", new double[] {3, 45, 100}, "d", new double[] {1, 30, 64});

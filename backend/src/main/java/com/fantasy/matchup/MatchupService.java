@@ -13,6 +13,7 @@ import com.fantasy.league.SeasonCalendar;
 import com.fantasy.lineup.LineupResponse;
 import com.fantasy.lineup.LineupService;
 import com.fantasy.lineup.LineupSolver;
+import com.fantasy.lockin.LockInAdviceResponse.PlayedGame;
 import com.fantasy.lockin.LockInMark;
 import com.fantasy.lockin.LockInMarkRepository;
 import com.fantasy.lockin.LockInScorer;
@@ -107,7 +108,8 @@ public class MatchupService {
         if (basketball) {
             notes.add("Each starter counts one game: a locked score, a score they can still lock, or the "
                     + "Lock-In value of their remaining games. Scores you mark as locked in the Lock-In tab are "
-                    + "final here; your opponent's locks aren't visible, so their latest scores count as lockable.");
+                    + "final here, as is any score where Sleeper counts an earlier game than the latest (for both "
+                    + "teams); other latest scores count as still lockable.");
         }
         if (snapshot.league().settings() != null && snapshot.league().settings().playsMedian()) {
             notes.add("This league also plays the weekly league median, which isn't included in this win probability.");
@@ -190,9 +192,10 @@ public class MatchupService {
             int gamesLeft = analysis.games().size();
             double projected;
             String status;
-            LockInMark lock = locks.get(id);
-            if (lock != null) {
-                projected = lock.getPoints();
+            LockInMark mark = locks.get(id);
+            PlayedGame inferred = mark == null ? data.inferredLock(id, actual) : null;
+            if (mark != null || inferred != null) {
+                projected = mark != null ? mark.getPoints() : inferred.points();
                 status = "locked";
             } else if (gamesLeft == 0) {
                 projected = actual;

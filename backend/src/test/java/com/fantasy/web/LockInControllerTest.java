@@ -30,7 +30,7 @@ class LockInControllerTest {
 
     private static final LockInAdviceResponse ADVICE = new LockInAdviceResponse(3, List.of(new StarterAdvice("PG",
             new PlayerSummary("4", "Jokić", "C", "DEN", null), Action.LOCK, "Lock it in", null, 48.1, List.of(),
-            null, true)), List.of());
+            null, true, false)), List.of());
 
     @Autowired
     private MockMvc mvc;

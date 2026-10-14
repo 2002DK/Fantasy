@@ -26,6 +26,7 @@ import com.fantasy.sleeper.SleeperGame;
 import com.fantasy.sleeper.SleeperLeague;
 import com.fantasy.sleeper.SleeperWeeklyEntry;
 import com.fantasy.sleeper.Sport;
+import com.fantasy.stats.DefenseTable;
 import com.fantasy.stats.WeeklyDataService;
 
 @ExtendWith(MockitoExtension.class)
@@ -174,6 +175,35 @@ class LockInScorerTest {
 
         assertThat(week.gamesPlayed(GUARD)).isEqualTo(1);
         assertThat(week.isPlaying(GUARD)).isFalse();
+    }
+
+    @Test
+    void finishedGamesThisWeekLeaveOutGamesInProgress() {
+        given(weeklyData.projections(Sport.NBA, "2026", 3)).willReturn(List.of());
+        given(weeklyData.schedule(Sport.NBA, "2026")).willReturn(List.of(
+                new SleeperGame("g1", 3, "PHI", "BOS", "complete", "2026-11-02"),
+                new SleeperGame("g2", 3, "NYK", "PHI", "in_game", "2026-11-04")));
+        given(weeklyData.liveStats(Sport.NBA, "2026", 3)).willReturn(List.of(
+                new SleeperWeeklyEntry("7", "PHI", "BOS", 3, Map.of("pts", 31.0, "sp", 2000.0), "2026-11-02", "g1"),
+                new SleeperWeeklyEntry("7", "PHI", "NYK", 3, Map.of("pts", 12.0, "sp", 900.0), "2026-11-04", "g2")));
+
+        LockInScorer.Week week = scorer.load(HOOPS, 3);
+
+        assertThat(week.playedGames("7")).extracting(LockInAdviceResponse.PlayedGame::points).containsExactly(31.0);
+    }
+
+    @Test
+    void onlyAnEarlierGamesScoreProvesALock() {
+        LockInScorer.Week week = new LockInScorer.Week("2026", 3, Map.of(), Map.of(), Map.of(), Map.of(),
+                DefenseTable.from(List.of()), List.of(), Map.of("7", List.of(
+                        new LockInAdviceResponse.PlayedGame("g1", "2026-11-02", "BOS", 44.5),
+                        new LockInAdviceResponse.PlayedGame("g2", "2026-11-04", "NYK", 30.25))));
+
+        assertThat(week.inferredLock("7", 44.5).gameId()).isEqualTo("g1");
+        assertThat(week.inferredLock("7", 30.25)).isNull(); // the latest game: locked or counting by default
+        assertThat(week.inferredLock("7", 0.0)).isNull();
+        assertThat(week.inferredLock("7", null)).isNull();
+        assertThat(week.inferredLock("8", 44.5)).isNull();
     }
 
     private static SleeperWeeklyEntry projection(String playerId, String gameId, String date, String opponent,

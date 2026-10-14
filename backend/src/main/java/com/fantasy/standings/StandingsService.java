@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +51,8 @@ public class StandingsService {
 
     static final int SIMULATIONS = 10_000;
     static final int DEFAULT_PLAYOFF_TEAMS = 6;
+    /** Concurrent Sleeper calls when fetching a season's pairings. */
+    static final int MAX_PARALLEL_REQUESTS = 6;
 
     private static final Logger log = LoggerFactory.getLogger(StandingsService.class);
 
@@ -139,10 +146,10 @@ public class StandingsService {
             List<String> notes) {
         List<WeekGames> weeks = new ArrayList<>();
         try {
+            Map<Integer, List<SleeperMatchup>> matchupsByWeek = loadPairings(leagueId, fromWeek, toWeek);
             for (int week = fromWeek; week <= toWeek; week++) {
                 int w = week;
-                List<SleeperMatchup> matchups = pairings.get(new LeagueWeek(leagueId, w),
-                        () -> sleeperClient.getMatchups(leagueId, w));
+                List<SleeperMatchup> matchups = matchupsByWeek.get(w);
                 Map<Integer, Double> means = new HashMap<>();
                 Map<Integer, Double> variances = new HashMap<>();
                 lineupPlayers.forEach((rosterId, players) -> {
@@ -165,6 +172,35 @@ public class StandingsService {
         boolean median = snapshot.league().settings() != null && snapshot.league().settings().playsMedian();
         long seed = (leagueId + ":" + fromWeek).hashCode();
         return SeasonSimulator.simulate(starts, weeks, playoffTeams, median, SIMULATIONS, seed);
+    }
+
+    /**
+     * Each remaining week's pairings, fetched a few at a time: a basketball season has
+     * about 20 regular-season weeks, and one call after another made the first visit slow.
+     */
+    private Map<Integer, List<SleeperMatchup>> loadPairings(String leagueId, int fromWeek, int toWeek) {
+        Map<Integer, List<SleeperMatchup>> byWeek = new TreeMap<>();
+        try (ExecutorService executor = Executors.newFixedThreadPool(MAX_PARALLEL_REQUESTS,
+                Thread.ofVirtual().factory())) {
+            Map<Integer, Future<List<SleeperMatchup>>> futures = new TreeMap<>();
+            for (int week = fromWeek; week <= toWeek; week++) {
+                int w = week;
+                futures.put(w, executor.submit(() -> pairings.get(new LeagueWeek(leagueId, w),
+                        () -> sleeperClient.getMatchups(leagueId, w))));
+            }
+            for (var entry : futures.entrySet()) {
+                byWeek.put(entry.getKey(), entry.getValue().get());
+            }
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RestClientException rce) {
+                throw rce;
+            }
+            throw new IllegalStateException("Loading the league schedule failed", e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while loading the league schedule", e);
+        }
+        return byWeek;
     }
 
     /** Teams sharing a matchup ID play each other. */

@@ -32,12 +32,11 @@ import com.fantasy.lockin.LockInAdviceResponse.Action;
 import com.fantasy.lockin.LockInAdviceResponse.StarterAdvice;
 import com.fantasy.lockin.LockInScorer.ScheduledGame;
 import com.fantasy.player.PlayerSummary;
+import com.fantasy.sleeper.SleeperClient;
 import com.fantasy.sleeper.SleeperLeague;
+import com.fantasy.sleeper.SleeperMatchup;
 import com.fantasy.sleeper.SleeperRoster;
-import com.fantasy.sleeper.SleeperWeeklyEntry;
-import com.fantasy.sleeper.Sport;
 import com.fantasy.stats.DefenseTable;
-import com.fantasy.stats.WeeklyDataService;
 
 /**
  * Six starters, one per situation. Each plays for their own team; "value" is the
@@ -65,7 +64,7 @@ class LockInAdvisorServiceTest {
     @Mock
     private LockInScorer scorer;
     @Mock
-    private WeeklyDataService weeklyData;
+    private SleeperClient sleeperClient;
     @Mock
     private LockInMarkRepository marks;
 
@@ -73,7 +72,7 @@ class LockInAdvisorServiceTest {
 
     @BeforeEach
     void setUp() {
-        advisor = new LockInAdvisorService(leagueData, calendar, scorer, weeklyData, marks,
+        advisor = new LockInAdvisorService(leagueData, calendar, scorer, sleeperClient, marks,
                 Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC));
         List<PlayerSummary> players = new ArrayList<>(STARTERS.stream().map(LockInAdvisorServiceTest::player).toList());
         players.add(player("bench"));
@@ -90,7 +89,9 @@ class LockInAdvisorServiceTest {
                         "DONE", List.of(done("m3")),
                         "LIVE", List.of(new ScheduledGame("x8", null, "BOS", true, "in_game"), upcoming("x9")),
                         "HELD", List.of(done("m4"), upcoming("y1"))),
-                Map.of(), Map.of(), DefenseTable.from(List.of()), new ArrayList<>()));
+                Map.of(), Map.of(), DefenseTable.from(List.of()), new ArrayList<>(), Map.of(
+                        "lock", List.of(played("m1", 50)), "pass", List.of(played("m2", 20)),
+                        "done", List.of(played("m3", 30)), "held", List.of(played("m4", 12)))));
         Map<String, double[]> outlook = Map.of( // games left, value, threshold after the first game left
                 "lock", new double[] {2, 40, 35}, "pass", new double[] {2, 40, 35}, "wait", new double[] {3, 50, 45},
                 "done", new double[] {0, 0, 0}, "live", new double[] {2, 38, 35}, "held", new double[] {1, 30, 0});
@@ -106,10 +107,6 @@ class LockInAdvisorServiceTest {
             return new LockInScorer.Analysis(p, o[0] > 0, null, games, null, null, List.of(),
                     new LockInModel.Outcome(o[1], 0, thresholds));
         });
-        // The in-progress game already has partial stats; it must not count as finished
-        lenient().when(weeklyData.liveStats(Sport.NBA, "2026", 3)).thenReturn(List.of(
-                box("lock", "m1", 50), box("pass", "m2", 20), box("done", "m3", 30), box("held", "m4", 12),
-                box("live", "x8", 25)));
         lenient().when(marks.findByLeagueIdAndUserIdAndWeek("L1", "me", 3)).thenReturn(List.of(
                 new LockInMark("L1", "me", 3, "held", "m0", "2026-11-01", "NYK", 44, Instant.EPOCH)));
     }
@@ -132,6 +129,27 @@ class LockInAdvisorServiceTest {
         assertThat(starters.get(2).upcoming()).extracting(LockInAdviceResponse.UpcomingGame::lockAbove)
                 .containsExactly(45.0, 0.0, null);
         assertThat(starters.get(5).lockedGame().points()).isEqualTo(44.0);
+        assertThat(starters).extracting(StarterAdvice::canUnmark)
+                .containsExactly(false, false, false, false, false, true);
+    }
+
+    @Test
+    void aScoreFromAnEarlierGameIsShownAsLockedWithoutMarking() {
+        // "pass" scored 45 on Sunday and 20 on Monday; Sleeper still counts the 45, so it was locked
+        LockInScorer.Week loaded = scorer.load(HOOPS, 3);
+        given(scorer.load(any(), anyInt())).willReturn(new LockInScorer.Week("2026", 3, loaded.scoring(),
+                loaded.gamesByTeam(), Map.of(), Map.of(), loaded.defenses(), new ArrayList<>(),
+                Map.of("pass", List.of(played("s1", 45), played("m2", 20)))));
+        given(sleeperClient.getMatchups("L1", 3)).willReturn(List.of(
+                new SleeperMatchup(1, 1, 45, STARTERS, Map.of("pass", 45.0))));
+
+        StarterAdvice pass = advisor.advice("L1", "me").starters().get(1);
+
+        assertThat(pass.action()).isEqualTo(Action.LOCKED);
+        assertThat(pass.message()).isEqualTo("Locked in at 45.0: Sleeper is counting an earlier game than their latest.");
+        assertThat(pass.lockedGame().gameId()).isEqualTo("s1");
+        assertThat(pass.canLock()).isFalse();
+        assertThat(pass.canUnmark()).isFalse();
     }
 
     @Test
@@ -181,8 +199,8 @@ class LockInAdvisorServiceTest {
         return new ScheduledGame(gameId, null, "MIA", false, "pre_game");
     }
 
-    private static SleeperWeeklyEntry box(String playerId, String gameId, double points) {
-        return new SleeperWeeklyEntry(playerId, playerId.toUpperCase(), "BOS", 3, Map.of("pts", points, "sp", 1500.0),
-                "2026-11-02", gameId);
+    private static LockInAdviceResponse.PlayedGame played(String gameId, double points) {
+        return new LockInAdviceResponse.PlayedGame(gameId, "2026-11-0" + (gameId.startsWith("s") ? "1" : "2"), "BOS",
+                points);
     }
 }

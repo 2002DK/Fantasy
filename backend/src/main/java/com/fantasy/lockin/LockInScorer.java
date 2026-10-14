@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 
+import com.fantasy.lockin.LockInAdviceResponse.PlayedGame;
 import com.fantasy.lockin.LockInService.PlayerWeek;
 import com.fantasy.player.PlayerService;
 import com.fantasy.player.PlayerSummary;
@@ -82,7 +83,42 @@ public class LockInScorer {
             /** Played games, newest first, up to {@link #FORM_GAMES} per player. */
             Map<String, List<RecentGame>> recentGames,
             DefenseTable defenses,
-            List<String> notes) {
+            List<String> notes,
+            /** Games finished this week, oldest first, scored with the league's settings. */
+            Map<String, List<PlayedGame>> playedThisWeek) {
+
+        /** Score-matching tolerance: Sleeper shows two decimals. */
+        static final double SAME_SCORE = 0.05;
+
+        public Week(String season, int week, Map<String, Double> scoring, Map<String, List<ScheduledGame>> gamesByTeam,
+                Map<String, PlayerWeek> projections, Map<String, List<RecentGame>> recentGames, DefenseTable defenses,
+                List<String> notes) {
+            this(season, week, scoring, gamesByTeam, projections, recentGames, defenses, notes, Map.of());
+        }
+
+        public List<PlayedGame> playedGames(String playerId) {
+            return playedThisWeek.getOrDefault(playerId, List.of());
+        }
+
+        /**
+         * The game a starter has locked, read from the score Sleeper counts for them. If that
+         * score matches an earlier game this week rather than the latest, it can only be
+         * there because it was locked. A score matching the latest game is ambiguous (locked,
+         * or counting by default), so it returns null.
+         */
+        public PlayedGame inferredLock(String playerId, Double counted) {
+            List<PlayedGame> games = playedGames(playerId);
+            if (counted == null || counted == 0 || games.size() < 2
+                    || Math.abs(counted - games.getLast().points()) < SAME_SCORE) {
+                return null;
+            }
+            for (PlayedGame game : games.subList(0, games.size() - 1)) {
+                if (Math.abs(counted - game.points()) < SAME_SCORE) {
+                    return game;
+                }
+            }
+            return null;
+        }
 
         public List<ScheduledGame> gamesOf(PlayerSummary player) {
             if (gamesByTeam == null || player.team() == null) {
@@ -164,7 +200,45 @@ public class LockInScorer {
             notes.add("Matchup rankings use only 1 week of games so far, so treat them as rough.");
         }
         return new Week(season, week, scoring, games, projections, recentGames(boxScores, scoring),
-                DefenseTable.fromBoxScores(boxScores, positions, scoring), notes);
+                DefenseTable.fromBoxScores(boxScores, positions, scoring), notes,
+                playedThisWeek(season, week, games, scoring, notes));
+    }
+
+    /**
+     * Each player's finished games this week, oldest first, scored with the league's
+     * settings. A game counts as finished once the schedule says so; without a schedule,
+     * any game with stats does.
+     */
+    private Map<String, List<PlayedGame>> playedThisWeek(String season, int week,
+            Map<String, List<ScheduledGame>> games, Map<String, Double> scoring, List<String> notes) {
+        Set<String> finished = new HashSet<>();
+        if (games != null) {
+            games.values().forEach(list -> list.stream().filter(ScheduledGame::complete)
+                    .forEach(g -> finished.add(g.gameId())));
+            if (finished.isEmpty()) {
+                return Map.of(); // nothing played yet: skip the download
+            }
+        }
+        List<SleeperWeeklyEntry> entries;
+        try {
+            entries = weeklyData.liveStats(Sport.NBA, season, week);
+        } catch (RestClientException e) {
+            log.warn("Box scores unavailable for week {}", week, e);
+            notes.add("This week's box scores are unavailable right now, so latest scores aren't shown.");
+            return Map.of();
+        }
+        Map<String, List<PlayedGame>> byPlayer = new HashMap<>();
+        for (SleeperWeeklyEntry entry : entries) {
+            if (games != null && !finished.contains(entry.gameId())) {
+                continue;
+            }
+            byPlayer.computeIfAbsent(entry.playerId(), id -> new ArrayList<>()).add(new PlayedGame(entry.gameId(),
+                    entry.date(), entry.opponent(), ScoringCalculator.points(entry, scoring)));
+        }
+        Comparator<PlayedGame> byDate = Comparator.comparing(PlayedGame::date,
+                Comparator.nullsFirst(Comparator.naturalOrder()));
+        byPlayer.values().forEach(list -> list.sort(byDate));
+        return byPlayer;
     }
 
     public Analysis analyze(PlayerSummary player, Week week) {
